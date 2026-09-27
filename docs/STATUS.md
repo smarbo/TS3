@@ -6,6 +6,8 @@ Updated: 2026-09-27
 
 V0 implementation and local failure validation are in place. **V0 is not complete and V1 is not safe to begin** until the mandatory 24-hour soak finishes and its replay/incident audit passes. The public source has been changed from Coinbase Exchange to Kraken Spot WebSocket v2 because Coinbase now requires authentication for Level 2. The ordinary tests, race detector in Ubuntu WSL, vet, short public live checks, and synthetic failure fixtures pass. No V1–V4 functionality or trading/account code has been added.
 
+The active development and acceptance branch is `v0`. The prior V0 implementation commit already exists on `main`; that history is preserved, and all further V0 fixes and acceptance documentation belong on `v0`. `main` remains frozen until the V0 acceptance gate passes. The official server soak must use one exact clean `v0` commit whose full hash appears in both the incremental run report and final manifest.
+
 ## Implemented
 
 - Typed raw and canonical events, exact decimal normalization, canonical JSON, receipt/admission/usable timestamp separation, ordered ticks, clock-break detection, and epoch barriers.

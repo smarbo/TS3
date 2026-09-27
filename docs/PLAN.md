@@ -2,6 +2,12 @@
 
 Milestones are sequential. Scope changes require updating [SPEC](SPEC.md), [ARCHITECTURE](ARCHITECTURE.md), [RESEARCH](RESEARCH.md), and [STATUS](STATUS.md) where affected. Passing a milestone's engineering tests does not establish a trading edge. Versions and thresholds are frozen before each evaluation period.
 
+## Git milestone branches
+
+`main` is the accepted-milestone branch; each active milestone develops and undergoes acceptance on its own branch (`v0`, then `v1`, `v2`, and so on). The existing `main` already contains the unaccepted V0 implementation from before this policy; preserve that history and make further V0 changes only on `v0`. Do not create `v1` or merge V0 while the mandatory server soak and replay audit remain open. For an official soak, check out one exact clean `v0` commit on the server and confirm that the run report and final manifest record its full hash without a dirty suffix. If code changes, start a new qualifying run at the new commit.
+
+After all V0 gates pass, verify a clean and fully validated `v0`, merge it into `main` without rewriting history, create an annotated `v0-complete` tag on the resulting `main` commit, and push `main`, `v0`, and the tag. Only then branch `v1` from the updated `main`. Develop V1 exclusively on `v1` until its acceptance gates pass; merge and tag it the same way. Repeat for later milestones. Never delete existing milestone branches, force-push, or rebase shared history.
+
 ## V0 — Data collection and deterministic replay
 
 **Exact scope.** Implement one public, unauthenticated Kraken Spot WebSocket v2 `book` subscription for `BTC/USD` at depth 100, plus automatic heartbeat and one ordered public `AssetPairs?pair=XBTUSD` metadata GET before the socket. Coinbase Exchange Level 2 was replaced because its current authentication requirement contradicts the repository's no-account rule. Preserve raw frames/control events with receipt, admission and nondecreasing usable times; normalize to `BookSnapshot`, `BookDelta`, `Heartbeat`, `ProductMetadata`, `SourceStatus`, and `ClockTick`; maintain one checksummed Level 2 book and quality state; replay the verified committed tape through the identical normalizer/quality/book processor. The manifest is provenance, never a market-state side input. No signals, intents or trading functionality are in V0.
