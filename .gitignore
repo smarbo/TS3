@@ -1,0 +1,4 @@
+.gocache/
+.gotmp/
+data/
+*.exe
