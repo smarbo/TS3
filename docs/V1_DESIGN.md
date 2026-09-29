@@ -10,14 +10,14 @@ Only `HEALTHY` books with a noncrossed BBO, current generation, and last book ag
 
 ## Frozen V1 feature and signal card
 
-One sample is taken per eligible recorded one-second tick; an equal-time tick does not add a duplicate sample. All windows contain the current sample and the specified number of immediately preceding *eligible, contiguous* tick samples in the same generation. No event-time bar or later revision is used. One intent is emitted at the first recorded tick in each UTC minute, including warm-up and unhealthy minutes; feature values appear only after warm-up. No output is backdated. The exact decision horizon is **300 seconds from hypothetical entry**. This Internet capture architecture makes second-scale execution claims inappropriate.
+One sample is taken per eligible recorded one-second tick; an equal-time tick does not add a duplicate sample. Adjacent samples must be at most two available-time seconds apart, and each window uses an explicit `UsableFromTime` boundary in the same generation. No event-time bar or later revision is used. One intent is emitted at the first recorded tick in each UTC minute, including warm-up and unhealthy minutes; feature values appear only after at least 900 contiguous available-time seconds. No output is backdated. The exact decision horizon is **300 seconds from hypothetical entry**. This Internet capture architecture makes second-scale execution claims inappropriate.
 
 | Value | Formula / units | Warm-up and mechanism |
 | --- | --- | --- |
 | Midpoint, spread | `(best_bid+best_ask)/2` USD/BTC and `(ask-bid)/mid * 10,000` bps | Current healthy quote; spread is immediate friction. |
-| `return_60_bps` | `10,000 * ln(mid_now/mid_60_samples_ago)` | 61 contiguous samples; recent repricing may persist. |
-| `mean_300` and `displacement_300_bps` | Arithmetic mean of 300 current and prior midpoint samples; `10,000 * ln(mid_now/mean_300)` | 300 samples; local displacement may revert. |
-| `rms_900_bps_sqrt_s` | Root mean square of the last 900 one-second midpoint log returns in bps | 901 samples; uncertainty/volatility context, not an independent directional signal. |
+| `return_60_bps` | `10,000 * ln(mid_now/mid_boundary)`; `mid_boundary` is the latest admitted tick at or before `T-60s`, at most two seconds older | 900-second common warm-up; recent repricing may persist. |
+| `mean_300` and `displacement_300_bps` | Arithmetic mean of admitted midpoint samples in `(T-300s,T]`; `10,000 * ln(mid_now/mean_300)` | 900-second common warm-up; local displacement may revert. |
+| `rms_900_bps_sqrt_s` | Square root of the sum of squared adjacent-sample log returns ending in `(T-900s,T]`, divided by 900 seconds | 900-second common warm-up; uncertainty/volatility context, not an independent directional signal. |
 
 Numeric feature outputs are rounded to integer **micro-bps** (0.000001 bp) before serialization or threshold comparison. Inputs are validated canonical decimal strings, converted to IEEE-754 binary64 at the V1 boundary; all rolling updates use fixed event order and a fixed Go toolchain. Repeated identical replay must produce byte-identical V1 outputs. Nonfinite or nonpositive values are unavailable and force `NO_TRADE`.
 
@@ -40,3 +40,5 @@ The same health/quote-age eligibility mask and decision timestamps apply to acti
 ## Acceptance gate
 
 V1 engineering acceptance requires: pure incremental engine and separate evaluator; boundary/warm-up/gap/staleness/future-poison and side/depth/cost tests; identical V1 output hashes from repeated full V0 raw replay (and live/common-prefix comparison if a V1 live run is made); a complete exploratory report with counts, coverage, censoring, paired controls, regime slices, cost and sensitivity disclosures; `go test -count=1 ./...`, `go test -race -count=1 ./...`, `go vet ./...`, `gofmt -l cmd internal`, `git diff --check`; and an adversarial final audit. A short live smoke is desirable but cannot prove profitability. No positive return is required. If the full gate has not passed, leave V1 incomplete and do not shut down the machine.
+
+Design correction before full outcome inspection: the first implementation used fixed sample counts for nominal 60/300/900-second features. Adversarial review found that admission jitter makes those time windows inaccurate. The corrected contract above uses explicit available-time boundaries; the frozen signal thresholds, cost assumptions, horizon and comparison population did not change. Research uncertainty is reported with a deterministic 1,000-resample bootstrap of 30-minute UTC blocks; this interval is exploratory and does not remove single-day or cross-block dependence.

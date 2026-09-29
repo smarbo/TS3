@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"reflect"
 	"testing"
 	"time"
 )
@@ -53,6 +54,32 @@ func TestEvaluatorUsesFirstQuoteAfterEntryAndExit(t *testing.T) {
 	}
 }
 
+func TestBlockUncertaintyIsDeterministic(t *testing.T) {
+	r, err := NewResearch("r", DefaultConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := []string{"policy", "momentum", "mean_reversion", "always_long", "random_matched", "no_trade"}
+	for block := int64(0); block < 4; block++ {
+		r.blocks[block] = map[string]blockSum{}
+		for _, name := range names {
+			r.blocks[block][name] = blockSum{net: float64(block), episodes: 1}
+			r.report.Comparators[name] = ResultStats{Episodes: 4, SumNetBps: 6}
+		}
+	}
+	r.bootstrap()
+	first := r.report.Uncertainty["policy"]
+	if first.Blocks != 4 || first.MeanNetBpsPerEpisode != 1.5 || first.P05Bps > first.MeanNetBpsPerEpisode || first.P95Bps < first.MeanNetBpsPerEpisode {
+		t.Fatalf("invalid interval: %+v", first)
+	}
+	saved := r.report.Uncertainty
+	r.report.Uncertainty = map[string]BootstrapInterval{}
+	r.bootstrap()
+	if !reflect.DeepEqual(saved, r.report.Uncertainty) {
+		t.Fatal("bootstrap changed on repeat")
+	}
+}
+
 func TestEvaluatorCensorsUnhealthyPath(t *testing.T) {
 	c := DefaultConfig()
 	r, err := NewResearch("r", c)
@@ -60,12 +87,8 @@ func TestEvaluatorCensorsUnhealthyPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	start := time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)
-	i := Intent{RunID: "r", ConfigSHA256: r.report.ConfigSHA256, AsOfTime: start, QuoteGeneration: 1,
-		DecisionID: "r:1:v1", Eligible: true, Features: &Features{MidUSD: 100}, Regime: "NORMAL"}
-	if err := r.AddDecision(i); err != nil {
-		t.Fatal(err)
-	}
-	v, q := fixture(start.Add(time.Second), 2, "99", "101")
+	addManualDecision(t, r, start)
+	v, q := fixture(start.Add(time.Second), 3, "99", "101")
 	v.Health = "UNHEALTHY"
 	if err := r.ObserveTick(v, q); err != nil {
 		t.Fatal(err)
@@ -83,12 +106,7 @@ func TestEvaluatorCannotUseFavorableQuoteBeforeLatency(t *testing.T) {
 		t.Fatal(err)
 	}
 	start := time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)
-	i := Intent{RunID: "r", ConfigSHA256: r.report.ConfigSHA256, AsOfTime: start,
-		DecisionID: "r:1:v1", Eligible: true, QuoteGeneration: 1,
-		Features: &Features{MidUSD: 100}, Regime: "NORMAL"}
-	if err := r.AddDecision(i); err != nil {
-		t.Fatal(err)
-	}
+	addManualDecision(t, r, start)
 	for n := 1; n <= 302; n++ {
 		bid, ask := "99", "101"
 		if n >= 2 {
@@ -97,7 +115,7 @@ func TestEvaluatorCannotUseFavorableQuoteBeforeLatency(t *testing.T) {
 		if n >= 302 {
 			bid, ask = "112", "114"
 		}
-		v, q := fixture(start.Add(time.Duration(n)*time.Second), uint64(n+1), bid, ask)
+		v, q := fixture(start.Add(time.Duration(n)*time.Second), uint64(n+2), bid, ask)
 		if err := r.ObserveTick(v, q); err != nil {
 			t.Fatal(err)
 		}
@@ -118,21 +136,16 @@ func TestEvaluatorCensorsMissingTicksAndNewGeneration(t *testing.T) {
 				t.Fatal(err)
 			}
 			start := time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)
-			i := Intent{RunID: "r", ConfigSHA256: r.report.ConfigSHA256, AsOfTime: start,
-				DecisionID: "r:1:v1", Eligible: true, QuoteGeneration: 1,
-				Features: &Features{MidUSD: 100}, Regime: "NORMAL"}
-			if err := r.AddDecision(i); err != nil {
-				t.Fatal(err)
-			}
-			v, q := fixture(start.Add(time.Second), 2, "99", "101")
+			addManualDecision(t, r, start)
+			v, q := fixture(start.Add(time.Second), 3, "99", "101")
 			if err := r.ObserveTick(v, q); err != nil {
 				t.Fatal(err)
 			}
-			v, q = fixture(start.Add(2*time.Second), 3, "99", "101")
+			v, q = fixture(start.Add(2*time.Second), 4, "99", "101")
 			if err := r.ObserveTick(v, q); err != nil {
 				t.Fatal(err)
 			}
-			v, q = fixture(start.Add(3*time.Second), 4, "99", "101")
+			v, q = fixture(start.Add(3*time.Second), 5, "99", "101")
 			if mode == "gap" {
 				v.AsOf = start.Add(6 * time.Second)
 			}
@@ -151,5 +164,43 @@ func TestEvaluatorCensorsMissingTicksAndNewGeneration(t *testing.T) {
 				t.Fatalf("missing censor %s: %+v", want, report)
 			}
 		})
+	}
+}
+
+func addManualDecision(t *testing.T, r *Research, start time.Time) {
+	t.Helper()
+	v, q := fixture(start, 2, "99", "101")
+	if err := r.ObserveTick(v, q); err != nil {
+		t.Fatal(err)
+	}
+	i := Intent{SchemaVersion: SchemaVersion, RunID: "r", ConfigSHA256: r.report.ConfigSHA256,
+		AsOfTime: start, AsOfOrdinal: 2, DecisionID: "r:2:v1", HorizonSeconds: 300,
+		Eligible: true, QuoteGeneration: 1, Features: &Features{MidUSD: 100}, Regime: "NORMAL"}
+	if err := r.AddDecision(i); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestEvaluatorRejectsFutureOrDuplicateIntent(t *testing.T) {
+	r, err := NewResearch("r", DefaultConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)
+	v, q := fixture(start, 2, "99", "101")
+	if err := r.ObserveTick(v, q); err != nil {
+		t.Fatal(err)
+	}
+	i := Intent{SchemaVersion: SchemaVersion, RunID: "r", ConfigSHA256: r.report.ConfigSHA256,
+		AsOfTime: start.Add(time.Second), AsOfOrdinal: 2, DecisionID: "r:2:v1", HorizonSeconds: 300}
+	if err := r.AddDecision(i); err == nil {
+		t.Fatal("future decision accepted")
+	}
+	i.AsOfTime = start
+	if err := r.AddDecision(i); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.AddDecision(i); err == nil {
+		t.Fatal("duplicate decision accepted")
 	}
 }

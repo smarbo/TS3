@@ -109,6 +109,7 @@ type Intent struct {
 }
 
 type sample struct {
+	at     time.Time
 	mid    float64
 	retBps float64
 }
@@ -121,8 +122,7 @@ type Engine struct {
 	lastTime         time.Time
 	lastMinute       time.Time
 	generation       uint64
-	window           [901]sample
-	count, next      int
+	samples          []sample
 }
 
 func NewEngine(runID string, config Config) (*Engine, error) {
@@ -140,25 +140,29 @@ func NewEngine(runID string, config Config) (*Engine, error) {
 }
 
 func (e *Engine) reset() {
-	e.count = 0
-	e.next = 0
+	e.samples = e.samples[:0]
 	e.lastTime = time.Time{}
 }
 
-func (e *Engine) add(mid float64) {
+func (e *Engine) add(at time.Time, mid float64) error {
 	r := 0.0
-	if e.count > 0 {
-		r = 10000 * math.Log(mid/e.ago(0).mid)
+	if len(e.samples) > 0 {
+		r = 10000 * math.Log(mid/e.samples[len(e.samples)-1].mid)
 	}
-	e.window[e.next] = sample{mid: mid, retBps: r}
-	e.next = (e.next + 1) % len(e.window)
-	if e.count < len(e.window) {
-		e.count++
+	e.samples = append(e.samples, sample{at: at, mid: mid, retBps: r})
+	oldest := at.Add(-902 * time.Second)
+	drop := 0
+	for drop < len(e.samples) && e.samples[drop].at.Before(oldest) {
+		drop++
 	}
-}
-
-func (e *Engine) ago(n int) sample {
-	return e.window[(e.next-1-n+len(e.window))%len(e.window)]
+	if drop > 0 {
+		copy(e.samples, e.samples[drop:])
+		e.samples = e.samples[:len(e.samples)-drop]
+	}
+	if len(e.samples) > 2048 {
+		return errors.New("excessive tick density in rolling window")
+	}
+	return nil
 }
 
 func scaled(bps float64) (int64, error) {
@@ -230,13 +234,20 @@ func (e *Engine) ApplyTick(v book.View, q book.Quote) (*Intent, error) {
 				e.reset()
 			}
 			mid := (bid + ask) / 2
-			e.add(mid)
+			if err := e.add(v.AsOf, mid); err != nil {
+				e.reset()
+				i.ReasonCodes = []string{"INVALID_WINDOW"}
+				if !emit {
+					return nil, nil
+				}
+				return i, nil
+			}
 			e.lastTime = v.AsOf
 			i.QuoteAgeMS = v.AsOf.Sub(q.LastBookAt).Milliseconds()
-			if e.count < len(e.window) {
+			if e.samples[0].at.After(v.AsOf.Add(-900 * time.Second)) {
 				i.ReasonCodes = []string{"WARMUP"}
 			} else {
-				features, err := e.features(mid, bid, ask)
+				features, err := e.features(v.AsOf, mid, bid, ask)
 				if err != nil {
 					e.reset()
 					i.ReasonCodes = []string{"INVALID_FEATURE"}
@@ -267,7 +278,7 @@ func (e *Engine) ApplyTick(v book.View, q book.Quote) (*Intent, error) {
 	return i, nil
 }
 
-func (e *Engine) features(mid, bid, ask float64) (Features, error) {
+func (e *Engine) features(at time.Time, mid, bid, ask float64) (Features, error) {
 	var f Features
 	f.Version = "tick-bbo-v1"
 	f.MidUSD = mid
@@ -276,22 +287,45 @@ func (e *Engine) features(mid, bid, ask float64) (Features, error) {
 	if err != nil {
 		return Features{}, err
 	}
-	f.Return60MicroBps, err = scaled(10000 * math.Log(mid/e.ago(60).mid))
+	target60 := at.Add(-60 * time.Second)
+	var mid60 float64
+	for n := len(e.samples) - 1; n >= 0; n-- {
+		if !e.samples[n].at.After(target60) {
+			if target60.Sub(e.samples[n].at) > 2*time.Second {
+				return Features{}, errors.New("missing 60-second boundary")
+			}
+			mid60 = e.samples[n].mid
+			break
+		}
+	}
+	if mid60 <= 0 {
+		return Features{}, errors.New("missing 60-second boundary")
+	}
+	f.Return60MicroBps, err = scaled(10000 * math.Log(mid/mid60))
 	if err != nil {
 		return Features{}, err
 	}
-	sum := 0.0
-	for n := 0; n < 300; n++ {
-		sum += e.ago(n).mid
+	sum, count := 0.0, 0
+	start300 := at.Add(-300 * time.Second)
+	for _, s := range e.samples {
+		if s.at.After(start300) {
+			sum += s.mid
+			count++
+		}
 	}
-	f.DisplacementMicroBps, err = scaled(10000 * math.Log(mid/(sum/300)))
+	if count == 0 {
+		return Features{}, errors.New("empty 300-second window")
+	}
+	f.DisplacementMicroBps, err = scaled(10000 * math.Log(mid/(sum/float64(count))))
 	if err != nil {
 		return Features{}, err
 	}
 	squares := 0.0
-	for n := 0; n < 900; n++ {
-		r := e.ago(n).retBps
-		squares += r * r
+	start900 := at.Add(-900 * time.Second)
+	for _, s := range e.samples {
+		if s.at.After(start900) {
+			squares += s.retBps * s.retBps
+		}
 	}
 	f.RMS900MicroBps, err = scaled(math.Sqrt(squares / 900))
 	return f, err

@@ -2,6 +2,8 @@ package v1
 
 import (
 	"bytes"
+	"fmt"
+	"math"
 	"testing"
 	"time"
 
@@ -15,6 +17,50 @@ func fixture(t time.Time, ordinal uint64, bid, ask string) (book.View, book.Quot
 	q := book.Quote{Epoch: 1, Generation: 1, LastBookOrdinal: ordinal - 1, LastBookAt: t,
 		Bids: []domain.Level{{Price: bid, Size: "10"}}, Asks: []domain.Level{{Price: ask, Size: "10"}}}
 	return v, q
+}
+
+func TestAvailableTimeWindowsWithIrregularTicks(t *testing.T) {
+	e, err := NewEngine("r", DefaultConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)
+	var final *Intent
+	for n := 0; n <= 600; n++ {
+		seconds := 1.5 * float64(n)
+		mid := 100 + seconds/600
+		at := start.Add(time.Duration(seconds * float64(time.Second)))
+		v, q := fixture(at, uint64(n+2), fmt.Sprintf("%.6f", mid-0.1), fmt.Sprintf("%.6f", mid+0.1))
+		final, err = e.ApplyTick(v, q)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if final == nil || final.Features == nil {
+		t.Fatalf("900-second warmup failed: %+v", final)
+	}
+	wantReturn, err := scaled(10000 * math.Log(101.5/101.4)) // t=840s is the exact 60s boundary
+	if err != nil {
+		t.Fatal(err)
+	}
+	if final.Features.Return60MicroBps != wantReturn {
+		t.Fatalf("time boundary: got %d want %d", final.Features.Return60MicroBps, wantReturn)
+	}
+	sum, count := 0.0, 0
+	for n := 0; n <= 600; n++ {
+		seconds := 1.5 * float64(n)
+		if seconds > 600 {
+			sum += 100 + seconds/600
+			count++
+		}
+	}
+	wantDisplacement, err := scaled(10000 * math.Log(101.5/(sum/float64(count))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if final.Features.DisplacementMicroBps != wantDisplacement {
+		t.Fatalf("300-second boundary: got %d want %d", final.Features.DisplacementMicroBps, wantDisplacement)
+	}
 }
 
 func TestWarmupMomentumStaleAndGeneration(t *testing.T) {
@@ -170,14 +216,14 @@ func TestEqualTickTimeDoesNotAdvanceWindow(t *testing.T) {
 	if _, err := e.ApplyTick(v, q); err != nil {
 		t.Fatal(err)
 	}
-	if e.count != 1 || e.ago(0).mid != 100 {
-		t.Fatalf("tie advanced window: count=%d mid=%f", e.count, e.ago(0).mid)
+	if len(e.samples) != 1 || e.samples[len(e.samples)-1].mid != 100 {
+		t.Fatalf("tie advanced window: count=%d mid=%f", len(e.samples), e.samples[len(e.samples)-1].mid)
 	}
 	v, q = fixture(start.Add(time.Second), 4, "100.9", "101.1")
 	if _, err := e.ApplyTick(v, q); err != nil {
 		t.Fatal(err)
 	}
-	if e.count != 2 {
+	if len(e.samples) != 2 {
 		t.Fatal("next distinct tick not sampled")
 	}
 }
