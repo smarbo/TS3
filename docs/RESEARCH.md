@@ -1,6 +1,6 @@
 # Research register
 
-This file separates **engineering fact** (documented source behavior or project contract), **hypothesis** (plausible but unverified prediction), and **empirical result** (measured out-of-sample evidence). There are **no empirical results** yet. Expected usefulness below is a prioritization judgment, not a performance claim. Research must record dataset, available-time semantics, venue/instrument universe, costs, and counterfactual baselines before testing.
+This file separates **engineering fact** (documented source behavior or project contract), **hypothesis** (plausible but unverified prediction), and **empirical result** (measured out-of-sample evidence). V0's accepted capture/replay is engineering evidence; there are **no validated predictive results** yet. Expected usefulness below is a prioritization judgment, not a performance claim. Research must record dataset, available-time semantics, venue/instrument universe, costs, and counterfactual baselines before testing. The pre-outcome V1 feature, signal, cost, and evaluation assumptions are frozen in [V1_DESIGN](V1_DESIGN.md).
 
 ## Source selection and candidate inputs
 

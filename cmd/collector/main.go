@@ -31,6 +31,7 @@ import (
 	"ts3/internal/source/kraken"
 	"ts3/internal/source/wsclient"
 	"ts3/internal/telemetry"
+	"ts3/internal/v1"
 	"ts3/internal/watchdog"
 )
 
@@ -50,6 +51,7 @@ func run() error {
 	runID := flag.String("run", "", "unique run ID (default UTC timestamp)")
 	duration := flag.Duration("duration", 0, "capture duration; 0 runs until interrupted")
 	endpoint := flag.String("endpoint", kraken.Endpoint, "public WebSocket endpoint")
+	enableV1 := flag.Bool("v1", false, "write V1 shadow analytical intents alongside V0 capture")
 	flag.Parse()
 	if *runID == "" {
 		*runID = time.Now().UTC().Format("20060102T150405Z")
@@ -130,6 +132,32 @@ func run() error {
 	if err := writeRunReport(*dir, *runID, baseReport, metrics, writer, proc, start, soakreport.Running); err != nil {
 		_ = writer.Close(false)
 		return fmt.Errorf("persist initial run report: %w", err)
+	}
+	var analysis *v1.Engine
+	var intentJournal *v1.Journal
+	v1ReportPath := filepath.Join(outputDir, "v1-report.json")
+	journalClosed := false
+	if *enableV1 {
+		analysis, err = v1.NewEngine(*runID, v1.DefaultConfig())
+		if err != nil {
+			_ = writer.Close(false)
+			return err
+		}
+		intentJournal, err = v1.NewJournal(outputDir, *runID, v1.DefaultConfig())
+		if err != nil {
+			_ = writer.Close(false)
+			return err
+		}
+		if err := v1.WriteLiveReport(v1ReportPath, v1.LiveReport{Status: "RUNNING", CodeRevision: codeRevision, UpdatedAt: time.Now().UTC(), Journal: intentJournal.Snapshot()}); err != nil {
+			_ = intentJournal.Close()
+			_ = writer.Close(false)
+			return err
+		}
+		defer func() {
+			if !journalClosed {
+				_ = intentJournal.Close()
+			}
+		}()
 	}
 	metadataOrdinal := uint64(0)
 	provenance := func() record.Provenance {
@@ -239,6 +267,10 @@ func run() error {
 		}
 		var lastView book.View
 		appliedTick := false
+		v1Pending := make([]struct {
+			intent v1.Intent
+			ready  time.Time
+		}, 0, 2)
 		began := time.Now()
 		if err := writer.AppendBatch(batch); err != nil {
 			return err
@@ -252,6 +284,18 @@ func run() error {
 			v, err := proc.Apply(r)
 			if err != nil {
 				return err
+			}
+			if analysis != nil && r.Kind == domain.ClockTick {
+				intent, err := analysis.ApplyTick(v, proc.Quote())
+				if err != nil {
+					return err
+				}
+				if intent != nil {
+					v1Pending = append(v1Pending, struct {
+						intent v1.Intent
+						ready  time.Time
+					}{*intent, time.Now().UTC()})
+				}
 			}
 			lastView = v
 			appliedTick = appliedTick || r.Kind == domain.ClockTick
@@ -281,6 +325,19 @@ func run() error {
 			slog.Info("book healthy", "ordinal", lastView.Ordinal, "epoch", lastView.Epoch)
 		}
 		gate.Progress(time.Since(start))
+		if intentJournal != nil {
+			for _, pending := range v1Pending {
+				if err := intentJournal.Append(pending.intent, pending.ready); err != nil {
+					return err
+				}
+			}
+			if err := intentJournal.Flush(gate.Open()); err != nil {
+				return err
+			}
+			if time.Since(began) > time.Second {
+				return errors.New("V1 shadow journal lag exceeded one second")
+			}
+		}
 		for _, ack := range acks {
 			if ack != nil {
 				ack <- nil
@@ -307,6 +364,9 @@ func run() error {
 						}
 					}
 					_ = telemetry.Write(filepath.Join(outputDir, "metrics.json"), metrics.Snapshot(time.Now().UTC(), time.Since(start)))
+					if intentJournal != nil {
+						_ = v1.WriteLiveReport(v1ReportPath, v1.LiveReport{Status: "INCOMPLETE", CodeRevision: codeRevision, UpdatedAt: time.Now().UTC(), Journal: intentJournal.Snapshot()})
+					}
 					writer.SetProvenance(provenance())
 					_ = writer.Close(false)
 					_ = writeRunReport(*dir, *runID, baseReport, metrics, writer, proc, start, soakreport.Incomplete, pipelineErr.Error())
@@ -346,6 +406,13 @@ func run() error {
 					slog.Error("derived output close failed", "error", err)
 				}
 				procClosed = true
+				if intentJournal != nil {
+					if err := intentJournal.Close(); err != nil {
+						clean = false
+						slog.Error("V1 journal close failed", "error", err)
+					}
+					journalClosed = true
+				}
 				writer.SetProvenance(provenance())
 				if err := writer.Close(clean); err != nil {
 					return err
@@ -356,6 +423,11 @@ func run() error {
 				}
 				if err := writeRunReport(*dir, *runID, baseReport, metrics, writer, proc, start, reportStatus); err != nil {
 					return fmt.Errorf("final run report: %w", err)
+				}
+				if intentJournal != nil {
+					if err := v1.WriteLiveReport(v1ReportPath, v1.LiveReport{Status: string(reportStatus), CodeRevision: codeRevision, UpdatedAt: time.Now().UTC(), Journal: intentJournal.Snapshot()}); err != nil {
+						return fmt.Errorf("final V1 report: %w", err)
+					}
 				}
 				nh, sh := proc.Hashes()
 				slog.Info("capture finished", "run", *runID, "committed", writer.CommittedOrdinal(), "normalized_sha256", nh, "state_sha256", sh, "gate_open", gate.Open(), "go", runtime.Version())
@@ -433,6 +505,15 @@ func run() error {
 				gate.Fail()
 				slog.Error("run report failed", "error", err)
 				cancel()
+			}
+			if intentJournal != nil && pipelineErr == nil {
+				if err := v1.WriteLiveReport(v1ReportPath, v1.LiveReport{Status: "RUNNING", CodeRevision: codeRevision, UpdatedAt: time.Now().UTC(), Journal: intentJournal.Snapshot()}); err != nil {
+					pipelineErr = fmt.Errorf("periodic V1 report: %w", err)
+					clean = false
+					gate.Fail()
+					slog.Error("V1 report failed", "error", err)
+					cancel()
+				}
 			}
 		}
 	}

@@ -34,6 +34,18 @@ type View struct {
 	LastBookOrdinal uint64    `json:"last_book_ordinal,string"`
 }
 
+// Quote is a detached, read-only depth snapshot for analytical consumers.
+// It is deliberately separate from View so V0's canonical state output stays
+// byte-for-byte compatible with the accepted recording.
+type Quote struct {
+	Epoch           uint64
+	Generation      uint64
+	LastBookOrdinal uint64
+	LastBookAt      time.Time
+	Bids            []domain.Level
+	Asks            []domain.Level
+}
+
 type State struct {
 	metadata                     bool
 	epoch                        uint64
@@ -245,6 +257,34 @@ func (s *State) view(e domain.Event) View {
 		v.BookSHA256 = Hash(s.bids, s.asks)
 	}
 	return v
+}
+
+func (s *State) Quote() Quote {
+	q := Quote{Epoch: s.epoch, Generation: s.generation, LastBookOrdinal: s.lastBookOrdinal, LastBookAt: s.lastBook}
+	if !s.ready {
+		return q
+	}
+	q.Bids = sortedLevels(s.bids, true)
+	q.Asks = sortedLevels(s.asks, false)
+	return q
+}
+
+func sortedLevels(side map[string]string, high bool) []domain.Level {
+	keys := make([]string, 0, len(side))
+	for price := range side {
+		keys = append(keys, price)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if high {
+			return domain.CompareDecimal(keys[i], keys[j]) > 0
+		}
+		return domain.CompareDecimal(keys[i], keys[j]) < 0
+	})
+	levels := make([]domain.Level, len(keys))
+	for i, price := range keys {
+		levels[i] = domain.Level{Price: price, Size: side[price]}
+	}
+	return levels
 }
 
 // Skip advances the raw ordinal for a control request or unknown future frame.

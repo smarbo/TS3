@@ -4,7 +4,7 @@ Updated: 2026-09-29
 
 ## Current phase
 
-**V0 COMPLETE. V1 is safe to begin when authorized, but no V1 work has started.** The official 24-hour-plus public Kraken capture and full replay passed the V0 engineering gate on 2026-09-29. This establishes durable capture, deterministic replay, and a reconstructable single-instrument book for that run; it does not establish provider-side completeness or any predictive or economic edge. No V1–V4 functionality or trading/account code has been added.
+**V0 COMPLETE. V1 is active on branch `v1`, but is not yet accepted.** The official 24-hour-plus public Kraken capture and full replay passed the V0 engineering gate on 2026-09-29. This establishes durable capture, deterministic replay, and a reconstructable single-instrument book for that run; it does not establish provider-side completeness or any predictive or economic edge. No V2–V4 functionality or trading/account code has been added.
 
 The official V0 source commit is `d26241151331795cf5005ba09d5f176d1efb6b22` on `v0`. The earlier `main` history containing preacceptance V0 was preserved; the acceptance record belongs on `v0` and is merged into `main` under the milestone branch policy. The run report and final manifest both record the exact clean source commit.
 
@@ -51,7 +51,13 @@ None. V0's engineering acceptance gate is complete. Continue to preserve the off
 
 ## Next implementation slice
 
-V1 may begin from the accepted `main` commit on a new `v1` branch when authorized. **Do not begin V1 as part of this acceptance audit.** Follow the V1 scope and gates in [PLAN](PLAN.md); no V1 functionality has been implemented.
+Implement and validate the frozen [V1 design](V1_DESIGN.md) on `v1`, then run the full accepted V0 tape through the V1 engine twice and compare intent hashes. Complete the separate historical outcome audit and any feasible live smoke before a V1 verdict. Do not merge `v1` into `main` or tag it without later human review.
+
+## V1 work in progress, 2026-09-29
+
+- The [frozen design](V1_DESIGN.md) and [adversarial design review](V1_DESIGN_REVIEW.md) define a one-second tick sampling path, 300-second hypothetical horizon, explicit quote freshness/depth, momentum policy, reversion comparator, assumed fee/allowance scenario, short-feasibility abstention, separate outcome evaluator, and engineering acceptance gate. These parameters were written before V1 outcome inspection.
+- The initial code adds a detached book-depth quote accessor without changing V0 canonical state JSON; `internal/v1` implements bounded causal features, descriptive regime, baseline signals, side-specific cost and decision logic, a separate evaluator, and an optional live shadow journal. `cmd/v1research` replays the accepted raw tape through the shared V0 processor and writes V1 intents and an exploratory report. Focused and repository-wide tests pass. A 100,000-ordinal development prefix replay completed with 34 minute decisions, 18 warm/eligible decisions, 13 paired outcomes, and no action under the frozen conservative cost screen; it is not V1 acceptance evidence. The optional live path still needs a smoke run.
+- **Still required:** validate the optional V1 live path with a public smoke run, finish full-tape research and repeated intent-hash comparison, inspect results and censoring adversarially, rerun broad validation after any fixes, and document final evidence. V1 is **not complete**. Do not shut down this computer while the gate remains open.
 
 ## Architecture review record
 

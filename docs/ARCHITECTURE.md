@@ -23,7 +23,7 @@ flowchart LR
   D --> I[Intent journal]
 ```
 
-`internal/domain` defines immutable values and interfaces. Adapters (`internal/source/kraken`, `internal/source/wsclient`, `internal/source/replay`, storage, telemetry) depend inward. The analysis packages depend on domain types and their own pure inputs; they must not import adapters, disk, WebSocket, wall-clock, or repository-wide mutable globals. V0 stops after ordered normalization, quality, and book state/replay comparison; V1 adds the analytical path.
+`internal/domain` defines immutable values and interfaces. Adapters (`internal/source/kraken`, `internal/source/wsclient`, `internal/source/replay`, storage, telemetry) depend inward. The analysis packages depend on domain types and their own pure inputs; they must not import adapters, disk, WebSocket, wall-clock, or repository-wide mutable globals. V0 stops after ordered normalization, quality, and book state/replay comparison; V1 adds the tick-driven baseline specified in [V1_DESIGN](V1_DESIGN.md).
 
 ## Canonical event model
 
@@ -37,15 +37,14 @@ V0 kinds are `BookSnapshot`, `BookDelta`, `Heartbeat`, `SourceStatus`, `ClockTic
 
 ## Source and engine interfaces
 
-The interface below describes the source boundary. V0's concrete shared downstream call is `processor.Processor.Apply(RawRecord)`; V1's `AnalysisEngine` remains a target contract and is not implemented yet:
+The interface below describes the source boundary. V0's concrete shared downstream call is `processor.Processor.Apply(RawRecord)`. V1 calls `v1.Engine.ApplyTick(book.View, book.Quote)` only after that same processor applies a committed `ClockTick`; both collector and research replay use this call:
 
 ```go
 type EventSource interface {
     Next(ctx context.Context) (RawRecord, error)
 }
-type AnalysisEngine interface {
-    Apply(Event) ([]AnalysisOutput, error) // deterministic, serial call order
-    Close() error
+type TickAnalysis interface {
+    ApplyTick(book.View, book.Quote) (*v1.Intent, error) // serial, recorded tick only
 }
 ```
 
@@ -69,7 +68,7 @@ Recorder ordinal, not exchange or receipt timestamp, controls replay. Kraken sna
 
 Quality begins `STARTING`, moves through `RECOVERING`, and becomes `HEALTHY` only with admitted online metadata, exact current-epoch acknowledgment, valid checksummed snapshot, intact recorder and a recent book message or automatic heartbeat. More than three recorded seconds without either a book message or heartbeat gives `UNHEALTHY`. More than 30 seconds without a book update while heartbeat continues gives `DEGRADED` as an activity warning. Every invalidation withdraws book availability. A separate monotonic live gate remains closed during startup, arms after the first applied tick and healthy book, and closes within the two-second stale-progress bound plus a 250 ms watchdog check on stalled tick/state/publication progress. Backpressure beyond a one-second handoff/commit deadline terminates capture rather than dropping messages. Replay reproduces committed analytical transitions, not live gate-close timing.
 
-Shutdown stops socket intake, commits the disconnect barrier and `SHUTDOWN`, drains and fsyncs derived outputs and progress marks, and writes the manifest. Forced interruption reports the valid, committed, applied, published, and uncertain suffixes. No V0 trading intent, account action, strategy, or V1+ feature is implemented.
+Shutdown stops socket intake, commits the disconnect barrier and `SHUTDOWN`, drains and fsyncs derived outputs and progress marks, and writes the manifest. Forced interruption reports the valid, committed, applied, published, and uncertain suffixes. The accepted V0 source commit has no analytical intents; the later optional `-v1` shadow path adds V1 output without changing the canonical V0 state schema.
 
 ## Later analytical modules
 
@@ -77,7 +76,9 @@ Shutdown stops socket intake, commits the disconnect barrier and `SHUTDOWN`, dra
 
 `RegimeEngine` initially uses robust realized-volatility/trend/liquidity summaries with explicit unknown dimensions. `Signal` modules return a typed unavailable result or a prediction with direction, horizon, gross-return distribution summary and feature provenance; calibration is a separate versioned component. `Ensemble` records family-level disagreement and dependence; it may abstain and must not double-count related evidence. `OpportunityModel` uses current-generation spread/depth, a required maximum quote age, fee and slippage assumptions, latency, volatility and uncertainty to compute a bounded net-opportunity estimate. Unknown or stale cost inputs cannot become zero costs. `DecisionEngine` applies predeclared health, calibration, disagreement, regime, and margin-of-safety gates, emitting a reasoned `NO_TRADE` or directional intent. These are target contracts, not claims of validated models.
 
-`TradeIntent v1` is `{intent_id, run_id, as_of_time, as_of_ordinal, decision_ready_at, published_at, earliest_hypothetical_entry_at, venue, instrument, action, horizon, expires_at, quote_generation, quote_as_of_ordinal, quote_age, direction_score?, p_net_positive?, p_move_exceeds_friction?, expected_gross_return?, expected_cost?, expected_net_return?, uncertainty?, supporting_feature_refs, signal_family_outputs, disagreement, regime, health, reason_codes, code_revision, config_hash, input_prefix_hash, model_versions}`. `as_of_time` is logical market information time, never a fill timestamp. `decision_ready_at` and `published_at` are measured live operational times retained in the output journal; replay does not overwrite them with replay processing speed. `earliest_hypothetical_entry_at` is at least `published_at` plus a predeclared nonnegative latency, with the first subsequent healthy side-specific quote determining a hypothetical fill observation. For offline research without live publication, use a separately declared conservative latency model and never label it a measured live fill. `input_prefix_hash` is the committed raw-input prefix hash through `as_of_ordinal`. Probability fields are absent unless calibrated and documented. Return units and horizon are explicit. Cost estimates use a predeclared reference notional, not account sizing. `SHORT` is a bearish analytical intent; the BTC/USD spot data source alone does not establish a shorting mechanism. Without a hypothetical short-feasibility and borrow/carry-cost assumption, a bearish forecast resolves to `NO_TRADE` with `SHORT_FEASIBILITY_UNKNOWN`. No quantity, leverage, order type, account ID, or execution endpoint is allowed.
+The implemented `TradeIntent` schema v1 is deliberately smaller than the long-term analytical target: deterministic decision ID, run/instrument, as-of ordinal/time, `LONG`/`SHORT`/`NO_TRADE`, 300-second horizon and expiry, quote generation/book ordinal/age, BBO, fixed research notional and assumed fee/allowance, current-book friction, versioned feature/regime/two-baseline evidence, health, reasons, and config digest. It has no probability, claimed expected return, quantity, account field, or fill. The default spot-only policy vetoes a bearish candidate with `SHORT_FEASIBILITY_UNKNOWN`. The append-only live acknowledgment journal separately stores measured decision-ready and intent-durable times and the operational gate state; replay never rewrites those facts. Offline research declares its own two-second hypothetical entry delay and first-eligible-quote rule. V1 output reports bind the intent hash to the source manifest digest and exact source/analysis revisions. See [V1_DESIGN](V1_DESIGN.md) for formulas and limitations.
+
+The V0 book owner supplies `Quote()` as a copied, sorted depth view with last book available time, epoch and generation. It does not alter the accepted `book.View` JSON or its hash. The optional `collector -v1` mode calls the same pure engine after committed ticks and writes a canonical shadow-intent journal after V0 derived state is durable. A second operational journal records intent durability and whether the live gate allowed publication; a gate veto cannot become an actionable external intent. Both journals and a five-second atomic V1 report are independent of the V0 manifest. `cmd/v1research` reads the verified raw tape, uses the same V0 processor and V1 engine, and feeds its immutable intents into a separate outcome evaluator. No outcome flows back into an engine call.
 
 ## Ownership, shutdown, and observability
 
@@ -90,9 +91,10 @@ Telemetry receives copies and cannot mutate analytical state. `context.Context` 
 ## Initial package/directory layout
 
 ```text
-cmd/collector/              V0 capture CLI
+cmd/collector/              V0 capture CLI, optional V1 shadow journal
 cmd/replay/                 V0 replay/verify CLI
 cmd/v0report/               V0 capture, incident and parity audit CLI
+cmd/v1research/             V1 full raw replay and exploratory evaluator
 internal/domain/            event, decimal, time and health contracts
 internal/source/kraken/    public metadata and book subscription adapter
 internal/source/replay/     ordered raw-reader adapter
@@ -103,6 +105,7 @@ internal/watchdog/          monotonic live availability gate
 internal/normalize/         source frame to canonical event
 internal/quality/           connection, clock, schema, staleness rules
 internal/book/              single-owner Level 2 state and stable hash
+internal/v1/                V1 bounded analytical engine, costs, evaluator, journal
 internal/engine/            V1+ analytical orchestrator
 internal/feature/           V1+ feature implementations
 internal/regime/            V1+ regime estimates
@@ -114,4 +117,4 @@ testdata/                   synthetic raw tapes and expected outputs
 docs/                       specification and research record
 ```
 
-Do not create empty V1+ packages in V0 merely to match this target tree.
+V1's small baseline is implemented together in `internal/v1/` and `cmd/v1research/`; the larger package tree above is a later architectural target, not a requirement to create empty packages.
