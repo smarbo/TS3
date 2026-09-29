@@ -1,6 +1,6 @@
 # V0 capture and replay runbook
 
-V0 is incomplete. The active source is public Kraken Spot `BTC/USD` book depth 100 with an ordered public metadata GET. Coinbase Exchange's Level 2 feed now requires authentication and is no longer used for live capture.
+V0 was accepted after the official run `kraken-v0-server-20260927T203224Z`; see [STATUS](STATUS.md) and [archived evidence](evidence/v0/). The V0 source is public Kraken Spot `BTC/USD` book depth 100 with an ordered public metadata GET. Coinbase Exchange's Level 2 feed now requires authentication and is no longer used for live capture.
 
 ## Commands
 
@@ -54,4 +54,4 @@ go run ./cmd/replay -dir data -run kraken-v0-server-20260928
 go run ./cmd/v0report -dir data -run kraken-v0-server-20260928
 ```
 
-Run the collector under a persistent server service or terminal multiplexer so an SSH disconnect does not end the process. Keep it running through its scheduled end with public Kraken HTTPS and WebSocket access. Run replay and the final audit only after the collector exits, `run-report.json` says `COMPLETE`, and the final manifest and `metrics.json` exist. The audit `checks` include the 24-hour healthy span, completed run report, exact high-water marks, lag sample coverage, manifest/raw integrity, and full output parity; inspect its incident list and health durations before accepting the soak. The command reports clock anomalies but does not claim an external clock-offset measurement. Archive the raw segments, run report, manifest, progress journal, replay result, and audit JSON. V0 remains incomplete until the 24-hour gate and incident audit pass.
+Run the collector under a persistent server service or terminal multiplexer so an SSH disconnect does not end the process. Keep it running through its scheduled end with public Kraken HTTPS and WebSocket access. Run replay and the final audit only after the collector exits, `run-report.json` says `COMPLETE`, and the final manifest and `metrics.json` exist. The audit `checks` include the 24-hour healthy span, completed run report, exact high-water marks, lag sample coverage, manifest/raw integrity, and full output parity; inspect its incident list and health durations before accepting the soak. The command reports clock anomalies but does not claim an external clock-offset measurement. Archive the raw segments, run report, manifest, progress journal, replay result, and audit JSON. The official V0 gate passed; later captures must meet these same criteria before making their own claims.

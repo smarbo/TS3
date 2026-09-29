@@ -4,9 +4,9 @@ Milestones are sequential. Scope changes require updating [SPEC](SPEC.md), [ARCH
 
 ## Git milestone branches
 
-`main` is the accepted-milestone branch; each active milestone develops and undergoes acceptance on its own branch (`v0`, then `v1`, `v2`, and so on). The existing `main` already contains the unaccepted V0 implementation from before this policy; preserve that history and make further V0 changes only on `v0`. Do not create `v1` or merge V0 while the mandatory server soak and replay audit remain open. For an official soak, check out one exact clean `v0` commit on the server and confirm that the run report and final manifest record its full hash without a dirty suffix. If code changes, start a new qualifying run at the new commit.
+`main` is the accepted-milestone branch; each active milestone develops and undergoes acceptance on its own branch (`v0`, then `v1`, `v2`, and so on). The existing `main` contained the unaccepted V0 implementation before this policy; that history was preserved. The accepted V0 source commit is `d26241151331795cf5005ba09d5f176d1efb6b22`, verified by the official run report and manifest without a dirty suffix. Future milestone acceptance soaks likewise use one exact clean commit; a code change requires a new qualifying run.
 
-After all V0 gates pass, verify a clean and fully validated `v0`, merge it into `main` without rewriting history, create an annotated `v0-complete` tag on the resulting `main` commit, and push `main`, `v0`, and the tag. Only then branch `v1` from the updated `main`. Develop V1 exclusively on `v1` until its acceptance gates pass; merge and tag it the same way. Repeat for later milestones. Never delete existing milestone branches, force-push, or rebase shared history.
+After all V0 gates pass, verify a clean and fully validated `v0`, merge it into `main` without rewriting history, create an annotated `v0-complete` tag on the resulting `main` commit, and push `main`, `v0`, and the tag. Only then branch `v1` from the updated `main` when V1 work begins. Develop V1 exclusively on `v1` until its acceptance gates pass; merge and tag it the same way. Repeat for later milestones. Never delete existing milestone branches, force-push, or rebase shared history.
 
 ## V0 — Data collection and deterministic replay
 
