@@ -53,27 +53,28 @@ func (s *ResultStats) Add(action Action, long, short Outcome) {
 }
 
 type Report struct {
-	SchemaVersion     int                          `json:"schema_version"`
-	RunID             string                       `json:"run_id"`
-	ConfigSHA256      string                       `json:"config_sha256"`
-	FirstTick         time.Time                    `json:"first_tick"`
-	LastTick          time.Time                    `json:"last_tick"`
-	LastOrdinal       uint64                       `json:"last_ordinal,string"`
-	CalendarMinutes   int                          `json:"calendar_minutes"`
-	Decisions         int                          `json:"decisions"`
-	EligibleDecisions int                          `json:"eligible_decisions"`
-	PairedEpisodes    int                          `json:"paired_episodes"`
-	Censored          map[string]int               `json:"censored"`
-	Reasons           map[string]int               `json:"reasons"`
-	RegimeCounts      map[string]int               `json:"regime_counts"`
-	Comparators       map[string]ResultStats       `json:"comparators"`
-	RegimePolicy      map[string]ResultStats       `json:"regime_policy"`
-	Uncertainty       map[string]BootstrapInterval `json:"uncertainty"`
-	PolicyCostLow     ResultStats                  `json:"policy_cost_allowance_0"`
-	PolicyCostHigh    ResultStats                  `json:"policy_cost_allowance_10"`
-	BorrowBpsPerDay   int                          `json:"research_short_borrow_bps_per_day"`
-	UncertaintyNote   string                       `json:"uncertainty_note"`
-	Limitations       []string                     `json:"limitations"`
+	SchemaVersion     int                               `json:"schema_version"`
+	RunID             string                            `json:"run_id"`
+	ConfigSHA256      string                            `json:"config_sha256"`
+	FirstTick         time.Time                         `json:"first_tick"`
+	LastTick          time.Time                         `json:"last_tick"`
+	LastOrdinal       uint64                            `json:"last_ordinal,string"`
+	CalendarMinutes   int                               `json:"calendar_minutes"`
+	Decisions         int                               `json:"decisions"`
+	EligibleDecisions int                               `json:"eligible_decisions"`
+	PairedEpisodes    int                               `json:"paired_episodes"`
+	Censored          map[string]int                    `json:"censored"`
+	Reasons           map[string]int                    `json:"reasons"`
+	RegimeCounts      map[string]int                    `json:"regime_counts"`
+	Comparators       map[string]ResultStats            `json:"comparators"`
+	FoldComparators   map[string]map[string]ResultStats `json:"fold_comparators"`
+	RegimePolicy      map[string]ResultStats            `json:"regime_policy"`
+	Uncertainty       map[string]BootstrapInterval      `json:"uncertainty"`
+	PolicyCostLow     ResultStats                       `json:"policy_cost_allowance_0"`
+	PolicyCostHigh    ResultStats                       `json:"policy_cost_allowance_10"`
+	BorrowBpsPerDay   int                               `json:"research_short_borrow_bps_per_day"`
+	UncertaintyNote   string                            `json:"uncertainty_note"`
+	Limitations       []string                          `json:"limitations"`
 }
 
 type episode struct {
@@ -103,7 +104,7 @@ func NewResearch(runID string, config Config) (*Research, error) {
 	}
 	return &Research{config: config, blocks: map[int64]map[string]blockSum{}, report: Report{SchemaVersion: SchemaVersion, RunID: runID,
 		ConfigSHA256: digest, Censored: map[string]int{}, Reasons: map[string]int{},
-		RegimeCounts: map[string]int{}, Comparators: map[string]ResultStats{}, RegimePolicy: map[string]ResultStats{}, Uncertainty: map[string]BootstrapInterval{},
+		RegimeCounts: map[string]int{}, Comparators: map[string]ResultStats{}, FoldComparators: map[string]map[string]ResultStats{}, RegimePolicy: map[string]ResultStats{}, Uncertainty: map[string]BootstrapInterval{},
 		BorrowBpsPerDay: ResearchBorrowBpsPerDay,
 		UncertaintyNote: "Exploratory 30-minute UTC block bootstrap (1,000 deterministic resamples, 5th/95th percentiles) for mean net bps per paired eligible decision. Five-minute outcomes overlap; one day and dependent blocks do not establish durable edge.",
 		Limitations:     []string{"Exploratory development tape; no sealed final period opened.", "Displayed depth and assumed taker costs are not fills or a current fee quote.", "Short comparator uses a hypothetical borrow scenario; spot data do not establish short feasibility."}}}, nil
@@ -149,7 +150,7 @@ func (r *Research) ObserveTick(v book.View, q book.Quote) error {
 				r.report.Censored["ENTRY_MISSING"]++
 				continue
 			}
-			if !v.AsOf.Before(p.entryAfter) {
+			if !v.AsOf.Before(p.entryAfter) && !q.LastBookAt.Before(p.entryAfter) {
 				p.entry = q
 				p.entryTime = v.AsOf
 				p.exitAfter = v.AsOf.Add(time.Duration(r.config.HorizonSeconds) * time.Second)
@@ -161,7 +162,7 @@ func (r *Research) ObserveTick(v book.View, q book.Quote) error {
 			r.report.Censored["EXIT_MISSING"]++
 			continue
 		}
-		if v.AsOf.Before(p.exitAfter) {
+		if v.AsOf.Before(p.exitAfter) || q.LastBookAt.Before(p.exitAfter) {
 			keep = append(keep, p)
 			continue
 		}
@@ -180,7 +181,8 @@ func (r *Research) AddDecision(i Intent) error {
 	if i.SchemaVersion != SchemaVersion || i.AsOfOrdinal == 0 || i.AsOfOrdinal <= r.lastDecisionOrdinal ||
 		i.AsOfOrdinal != r.report.LastOrdinal || !i.AsOfTime.Equal(r.report.LastTick) ||
 		i.DecisionID != fmt.Sprintf("%s:%d:v1", i.RunID, i.AsOfOrdinal) ||
-		i.HorizonSeconds != r.config.HorizonSeconds {
+		i.HorizonSeconds != r.config.HorizonSeconds ||
+		(i.Action != Long && i.Action != Short && i.Action != NoTrade) {
 		return fmt.Errorf("research decision order/schema mismatch at %d", i.AsOfOrdinal)
 	}
 	r.lastDecisionOrdinal = i.AsOfOrdinal
@@ -239,6 +241,20 @@ func (r *Research) complete(p episode, exit book.Quote, exitTime time.Time) erro
 		s := r.report.Comparators[name]
 		s.Add(action, long, short)
 		r.report.Comparators[name] = s
+		fold := int(p.intent.AsOfTime.Sub(r.report.FirstTick) / (6 * time.Hour))
+		if fold < 0 {
+			return fmt.Errorf("decision before first tick")
+		}
+		if fold > 3 {
+			fold = 3
+		}
+		foldName := fmt.Sprintf("fold_%d", fold)
+		if r.report.FoldComparators[foldName] == nil {
+			r.report.FoldComparators[foldName] = map[string]ResultStats{}
+		}
+		fs := r.report.FoldComparators[foldName][name]
+		fs.Add(action, long, short)
+		r.report.FoldComparators[foldName][name] = fs
 		blockID := p.intent.AsOfTime.UTC().Unix() / (30 * 60)
 		if r.blocks[blockID] == nil {
 			r.blocks[blockID] = map[string]blockSum{}

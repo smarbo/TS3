@@ -49,6 +49,9 @@ func TestEvaluatorUsesFirstQuoteAfterEntryAndExit(t *testing.T) {
 	if report.Comparators["always_long"].Episodes != report.PairedEpisodes {
 		t.Fatal("unpaired control")
 	}
+	if report.FoldComparators["fold_0"]["always_long"].Episodes != report.PairedEpisodes {
+		t.Fatal("chronological fold lost paired episodes")
+	}
 	if report.Comparators["no_trade"].SumNetBps != 0 {
 		t.Fatal("NO_TRADE has return")
 	}
@@ -80,6 +83,27 @@ func TestBlockUncertaintyIsDeterministic(t *testing.T) {
 	}
 }
 
+func TestChronologicalFoldBoundary(t *testing.T) {
+	r, err := NewResearch("r", DefaultConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)
+	r.report.FirstTick = start
+	entryAt := start.Add(6*time.Hour + 2*time.Second)
+	_, entry := fixture(entryAt, 10, "99", "101")
+	_, exit := fixture(entryAt.Add(5*time.Minute), 11, "100", "102")
+	p := episode{intent: Intent{AsOfTime: start.Add(6 * time.Hour), Action: NoTrade, Regime: "NORMAL"},
+		quantity: 1, entry: entry, entryTime: entryAt}
+	if err := r.complete(p, exit, entryAt.Add(5*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if r.report.FoldComparators["fold_1"]["always_long"].Episodes != 1 ||
+		r.report.FoldComparators["fold_0"]["always_long"].Episodes != 0 {
+		t.Fatalf("wrong fold: %+v", r.report.FoldComparators)
+	}
+}
+
 func TestEvaluatorCensorsUnhealthyPath(t *testing.T) {
 	c := DefaultConfig()
 	r, err := NewResearch("r", c)
@@ -107,15 +131,18 @@ func TestEvaluatorCannotUseFavorableQuoteBeforeLatency(t *testing.T) {
 	}
 	start := time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)
 	addManualDecision(t, r, start)
-	for n := 1; n <= 302; n++ {
+	for n := 1; n <= 303; n++ {
 		bid, ask := "99", "101"
-		if n >= 2 {
+		if n >= 3 {
 			bid, ask = "109", "111"
 		}
-		if n >= 302 {
+		if n >= 303 {
 			bid, ask = "112", "114"
 		}
 		v, q := fixture(start.Add(time.Duration(n)*time.Second), uint64(n+2), bid, ask)
+		if n == 2 {
+			q.LastBookAt = start.Add(time.Second)
+		} // still healthy, but observed before entry boundary
 		if err := r.ObserveTick(v, q); err != nil {
 			t.Fatal(err)
 		}
@@ -174,7 +201,7 @@ func addManualDecision(t *testing.T, r *Research, start time.Time) {
 		t.Fatal(err)
 	}
 	i := Intent{SchemaVersion: SchemaVersion, RunID: "r", ConfigSHA256: r.report.ConfigSHA256,
-		AsOfTime: start, AsOfOrdinal: 2, DecisionID: "r:2:v1", HorizonSeconds: 300,
+		AsOfTime: start, AsOfOrdinal: 2, DecisionID: "r:2:v1", HorizonSeconds: 300, Action: NoTrade,
 		Eligible: true, QuoteGeneration: 1, Features: &Features{MidUSD: 100}, Regime: "NORMAL"}
 	if err := r.AddDecision(i); err != nil {
 		t.Fatal(err)
@@ -192,7 +219,7 @@ func TestEvaluatorRejectsFutureOrDuplicateIntent(t *testing.T) {
 		t.Fatal(err)
 	}
 	i := Intent{SchemaVersion: SchemaVersion, RunID: "r", ConfigSHA256: r.report.ConfigSHA256,
-		AsOfTime: start.Add(time.Second), AsOfOrdinal: 2, DecisionID: "r:2:v1", HorizonSeconds: 300}
+		AsOfTime: start.Add(time.Second), AsOfOrdinal: 2, DecisionID: "r:2:v1", HorizonSeconds: 300, Action: NoTrade}
 	if err := r.AddDecision(i); err == nil {
 		t.Fatal("future decision accepted")
 	}

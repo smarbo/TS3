@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"ts3/internal/domain"
+	"ts3/internal/durable"
 	"ts3/internal/processor"
 	"ts3/internal/record"
 	"ts3/internal/source/replay"
@@ -100,6 +101,35 @@ func writeLine(w *bufio.Writer, h hash.Hash, value any) error {
 	return nil
 }
 
+func writeFinalReport(path string, b []byte) error {
+	dir := filepath.Dir(path)
+	f, err := os.CreateTemp(dir, ".v1-research-*")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	defer os.Remove(tmp)
+	if err := f.Chmod(0644); err != nil {
+		f.Close()
+		return err
+	}
+	if _, err := f.Write(b); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		return err
+	}
+	return durable.SyncDir(dir)
+}
+
 func run() error {
 	dir := flag.String("dir", "data", "raw V0 recording directory")
 	runID := flag.String("run", "", "V0 run ID")
@@ -120,11 +150,19 @@ func run() error {
 	if err := os.Mkdir(*out, 0755); err != nil {
 		return fmt.Errorf("create unique output directory: %w", err)
 	}
+	if err := durable.SyncDir(filepath.Dir(*out)); err != nil {
+		return err
+	}
 	p, err := processor.New(filepath.Join(*out, "v0"), false)
 	if err != nil {
 		return err
 	}
-	defer p.Close()
+	pClosed := false
+	defer func() {
+		if !pClosed {
+			_ = p.Close()
+		}
+	}()
 	engine, err := v1.NewEngine(*runID, v1.DefaultConfig())
 	if err != nil {
 		return err
@@ -137,7 +175,12 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	fClosed := false
+	defer func() {
+		if !fClosed {
+			_ = f.Close()
+		}
+	}()
 	w := bufio.NewWriterSize(f, 1<<20)
 	h := sha256.New()
 	for {
@@ -181,10 +224,19 @@ func run() error {
 	if err := f.Sync(); err != nil {
 		return err
 	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	fClosed = true
 	if err := p.Flush(); err != nil {
 		return err
 	}
 	nh, sh := p.Hashes()
+	processed := p.Last()
+	if err := p.Close(); err != nil {
+		return err
+	}
+	pClosed = true
 	manifestPath := filepath.Join(*dir, *runID+".manifest.json")
 	manifestHash, err := fileHash(manifestPath)
 	if err != nil {
@@ -199,11 +251,12 @@ func run() error {
 		return err
 	}
 	rawReport := src.Report()
-	full := !rawReport.Incomplete && p.Last() == rawReport.CommittedOrdinal && manifest.Clean
+	full := !rawReport.Incomplete && processed == rawReport.CommittedOrdinal &&
+		processed == manifest.CommittedOrdinal && manifest.RunID == *runID && manifest.Clean
 	report := outputReport{SchemaVersion: 1, SourceRunID: *runID,
 		SourceCodeRevision: manifest.Provenance.CodeRevision, SourceManifestSHA: manifestHash,
 		AnalysisRevision: revision(), GoVersion: runtime.Version(), Input: rawReport,
-		ProcessedOrdinal: p.Last(), FullCommittedPrefix: full,
+		ProcessedOrdinal: processed, FullCommittedPrefix: full,
 		V0NormalizedSHA256: nh, V0StateSHA256: sh,
 		IntentSHA256: hex.EncodeToString(h.Sum(nil)), Research: research.Finalize()}
 	b, err := domain.CanonicalJSON(report)
@@ -211,7 +264,7 @@ func run() error {
 		return err
 	}
 	b = append(b, '\n')
-	if err := os.WriteFile(filepath.Join(*out, "report.json"), b, 0644); err != nil {
+	if err := writeFinalReport(filepath.Join(*out, "report.json"), b); err != nil {
 		return err
 	}
 	if !full && *through == 0 {
