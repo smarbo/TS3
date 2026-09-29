@@ -231,3 +231,21 @@ func TestEvaluatorRejectsFutureOrDuplicateIntent(t *testing.T) {
 		t.Fatal("duplicate decision accepted")
 	}
 }
+
+func TestRandomComparatorMatchesFilteredPolicyFrequency(t *testing.T) {
+	for _, intent := range []Intent{
+		{Action: NoTrade, Momentum: Signal{Direction: Long}},
+		{Action: NoTrade, Momentum: Signal{Direction: Short}},
+		{Action: NoTrade, Momentum: Signal{Direction: Flat}},
+	} {
+		if got := randomAction(intent); got != NoTrade {
+			t.Fatalf("filtered policy acted in random control: %s", got)
+		}
+	}
+	for _, action := range []Action{Long, Short} {
+		got := randomAction(Intent{Action: action, DecisionID: "r:2:v1"})
+		if got != Long && got != Short {
+			t.Fatalf("policy action absent from random control: %s", got)
+		}
+	}
+}

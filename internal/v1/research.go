@@ -205,7 +205,7 @@ func (r *Research) AddDecision(i Intent) error {
 }
 
 func randomAction(i Intent) Action {
-	if i.Momentum.Direction == Flat {
+	if i.Action != Long && i.Action != Short {
 		return NoTrade
 	}
 	h := sha256.Sum256([]byte(i.DecisionID))

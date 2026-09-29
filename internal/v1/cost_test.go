@@ -41,6 +41,13 @@ func TestSideSpecificCostAndNoDoubleSpread(t *testing.T) {
 	}
 	near(t, short.GrossMidBps, -300)
 	near(t, short.NetBps, -550.75)
+	c.BorrowBpsPerDay = 10
+	shortWithBorrow, err := EvaluateSide(entry, exit, 1, Short, c, 5*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	near(t, shortWithBorrow.BorrowBps, 10*5.0/1440.0)
+	near(t, shortWithBorrow.NetBps, short.NetBps-10*5.0/1440.0)
 }
 
 func TestDepthSweepAndCensoring(t *testing.T) {

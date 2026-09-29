@@ -13,4 +13,6 @@ Date: 2026-09-29. Reviewed before implementation or V1 outcome inspection.
 9. **ACCEPT — Sample count mislabelled as elapsed-time lookback.** A tick can arrive late or two ticks can share a usable time. Fixed 60/300/900 sample counts do not imply 60/300/900 seconds. Use available-time boundaries, skip equal-time duplicates, reset after more than two seconds, and test irregular 1.5-second spacing. This was corrected before full-tape outcomes were inspected.
 10. **ACCEPT — Held pre-boundary quote mistaken for a new executable observation.** A healthy tick just after the entry deadline can carry a book last updated before that deadline. Quote age alone does not prove the first eligible post-latency quote. Require the book update's available time to be at or after the entry and exit boundary, and test a favorable held quote that must be skipped.
 
+11. **ACCEPT - Random comparator frequency mismatch.** Sampling direction on every nonflat momentum candidate can overstate action frequency relative to the filtered policy. Randomize direction only on the policy's actual actionable timestamps; pair endpoints and costs as before. Corrected before full-tape outcome inspection.
+
 No second feed, probability calibrator, model selection, training pipeline, or V2/V3 ensemble is justified in V1.
