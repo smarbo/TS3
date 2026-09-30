@@ -1,0 +1,26 @@
+{
+  "analysis_binary_sha256": "d733a0cb253ffcaf2a7a2b69fc389b45d381ec643b97650e63b5afaee60c8946",
+  "archived_sha256": {
+    "historical-1-intents.jsonl": "b43a39952c12348b7f340af79c2b36e0596f978a5709519d9c953bd6f55ef505",
+    "historical-1-report.json": "b93d5f39fbab36ba23a0f18e3d0d554c907035c2603a22a32cf310cc402f034f",
+    "historical-2-intents.jsonl": "b43a39952c12348b7f340af79c2b36e0596f978a5709519d9c953bd6f55ef505",
+    "historical-2-report.json": "b93d5f39fbab36ba23a0f18e3d0d554c907035c2603a22a32cf310cc402f034f",
+    "smoke-collector-binary.sha256": "16893c9d15e968f58bc8ef565998c519d7ec7e35622502ebbc3ef1d034c7edc6",
+    "smoke-collector-build-info.txt": "d795a1a1e9026d0215c2f6a9c3163deb87eb5b95be3f39d9b5fe9a17aa53f90d",
+    "smoke-collector.log": "3249597f612864e592d11cba10c805f8db6896cf11203482924b8ae4bbfdb2d7",
+    "smoke-manifest.json": "a82e081caa1b763f2ca77319f3052c0736ba86c2c5f6403c27f10e5bbd11d9b9",
+    "smoke-metrics.json": "8a5e13897b86a392b6d7d65ee32c670fea86d3111373a2590e2cdbd86ce8bba9",
+    "smoke-replay-intents.jsonl": "b77ac20d9a6bd52eb307f6fb55d11d2b3f0df61cdbe64c084a04b4fbaa2ce1e1",
+    "smoke-replay-report.json": "a4952ced5141deec456ecc71a5a3cfd2fd2de8328a803c56e964474db0fe4878",
+    "smoke-run-report.json": "637a0682aa68e54b0b9635222235ccd329388e521ab90c6d5a0e3611d22c4db5",
+    "smoke-v2-intents.jsonl": "b77ac20d9a6bd52eb307f6fb55d11d2b3f0df61cdbe64c084a04b4fbaa2ce1e1",
+    "smoke-v2-live-acks.jsonl": "9f547c77be6301d226bf9dd50e5af3cba7721d5116eaced888d4a28b816388fa",
+    "smoke-v2-report.json": "ead4e5dcbea4a010fca6c04678e89792167e653bd147ca4e65a8cfef52e49b9a"
+  },
+  "collector_binary_sha256": "f91d74127108ea946ca5cdfbfc6fb13f6dabca84c53408ff2e3f2ae9f0e5887f",
+  "historical_first": "/home/eddie/TS3-v2-accept-1",
+  "historical_second": "/home/eddie/TS3-v2-accept-2",
+  "smoke_replay": "/home/eddie/TS3-v2-smoke-replay-5d16473",
+  "smoke_root": "/home/eddie/TS3-v2-smoke-clean",
+  "smoke_run": "v2-smoke-5d16473-20260930T191500Z"
+}

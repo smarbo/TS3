@@ -34,10 +34,29 @@ Check each `report.json`: `full_committed_prefix=true`; valid, committed and pro
 
 ## Public live smoke and exact replay
 
-After historical correctness and a clean committed collector build, start a fresh public capture in a dedicated WSL directory with `-v2`, for at least 21 minutes so the 900-second V1 feature warm-up and 20-second pressure warm-up both finish. Use a unique run ID and preserve stdout, binary build info and SHA-256. The collector writes `v2-intents.jsonl`, `v2-live-acks.jsonl`, and an atomic five-second `v2-report.json` beside the V0 run files. Its canonical intents never include live wall-clock timing. The separate acknowledgments record decision-ready/durable times and watchdog vetoes. Stop cleanly at the specified duration; a shutdown `NO_TRADE` remains an ordinary intent.
+After historical correctness and a clean committed collector build, start a fresh public capture in a dedicated WSL directory with `-v2`. Use approximately one to four hours for the engineering smoke; allow at least 21 minutes for the 900-second V1 feature warm-up and 20-second pressure warm-up, and verify that healthy warmed decisions actually occurred. Use a unique run ID and preserve stdout, binary build info and SHA-256. The collector writes `v2-intents.jsonl`, `v2-live-acks.jsonl`, and an atomic five-second `v2-report.json` beside the V0 run files. Its canonical intents never include live wall-clock timing. The separate acknowledgments record decision-ready/durable times and watchdog vetoes. Stop cleanly at the specified duration; a shutdown `NO_TRADE` remains an ordinary intent.
 
 Replay **that exact raw live run** with the same V2 research binary to a new output directory. Compare the live `v2-intents.jsonl` and replay `intents.jsonl` SHA-256, ordinals and count; compare V0 normalized/state hashes and common applied/committed prefixes. Inspect operational lag and gate events separately; fast replay cannot prove live timeliness. If the live run is interrupted, preserve all raw/journal evidence, mark it incomplete, and repeat the smoke from a new run ID.
 
 ## Interpretation
 
 The accepted approximately one-day tape and short forward smoke establish only engineering behavior. The V2 policy may emit no directional intents. Report that as a result, investigate whether the reason is signal absence, conflict, cost, or a defect, and do not tune the frozen thresholds to manufacture actions. Cost-adjusted hypothetical returns are not fills or proof of profitability. No optional second feed is part of this core run.
+
+## Accepted V2-001 evidence, 2026-09-30
+
+The exact clean implementation revision is `5d1647386fe935412a68b333514858f6b2039d0f`, with research binary `/home/eddie/ts3-v2-research-5d16473` (SHA-256 `d733a0cb253ffcaf2a7a2b69fc389b45d381ec643b97650e63b5afaee60c8946`) and collector binary `/home/eddie/ts3-v2-collector-5d16473` (SHA-256 `f91d74127108ea946ca5cdfbfc6fb13f6dabca84c53408ff2e3f2ae9f0e5887f`). Launching the collector from the **clean WSL checkout** `/home/eddie/TS3-v2-validation` matters: the collector records the current directory's Git revision/dirty status in its report and manifest. A clean binary launched from a dirty mounted checkout produced a preliminary `+dirty` report and was excluded.
+
+The completed historical output directories are `/home/eddie/TS3-v2-accept-1` and `/home/eddie/TS3-v2-accept-2`. The qualifying public run is `v2-smoke-5d16473-20260930T191500Z`, with raw root `/home/eddie/TS3-v2-smoke-clean` and raw replay output `/home/eddie/TS3-v2-smoke-replay-5d16473`. The [archived evidence manifest](evidence/v2/evidence-manifest.json) lists every small archived report/intent/journal/log file and its SHA-256. The large raw tape and regenerated V0 normalized/state files remain at those WSL paths. The archive is sufficient to inspect reports and intent bytes; the WSL files are required to independently rehash full raw/derived streams.
+
+From the repository's Windows mount inside WSL, the completed acceptance checks are reproducible with:
+
+```sh
+python3 tools/v2_audit.py /home/eddie/TS3-v2-accept-1 /home/eddie/TS3-v2-accept-2
+python3 tools/v2_live_audit.py \
+  /home/eddie/TS3-v2-smoke-clean/v2-smoke-5d16473-20260930T191500Z \
+  /home/eddie/TS3-v2-smoke-replay-5d16473 \
+  5d1647386fe935412a68b333514858f6b2039d0f
+python3 tools/v2_cohort_summary.py /home/eddie/TS3-v2-accept-1
+```
+
+Both full historical replays, the 65-minute smoke and its raw replay exited 0. The full replay audit passed with 12,316,574 ordinals, exact accepted V0/V1 hashes, byte-identical V2 intents and reports, 1,446 decisions, 1,339 eligible, 1,302 five-minute paired and 1,332 pressure 30-second paired episodes. The live audit passed with 422,062 raw ordinals, 67 durably acknowledged V2 intents, exact V0/V2 live/replay parity, no gate veto and a clean ordered shutdown. See [V2_RESEARCH_REPORT](V2_RESEARCH_REPORT.md) for results and [V2_FINAL_AUDIT](V2_FINAL_AUDIT.md) for the adversarial gate. The published archive contains no account keys, private data, orders, or execution code.

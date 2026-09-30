@@ -1,0 +1,17 @@
+/home/eddie/ts3-v2-research-5d16473: go1.27.0
+	path	ts3/cmd/v2research
+	mod	ts3	v0.0.0-20260930183811-5d1647386fe9	
+	build	-buildmode=exe
+	build	-compiler=gc
+	build	CGO_ENABLED=1
+	build	CGO_CFLAGS=
+	build	CGO_CPPFLAGS=
+	build	CGO_CXXFLAGS=
+	build	CGO_LDFLAGS=
+	build	GOARCH=amd64
+	build	GOOS=linux
+	build	GOAMD64=v1
+	build	vcs=git
+	build	vcs.revision=5d1647386fe935412a68b333514858f6b2039d0f
+	build	vcs.time=2026-09-30T18:38:11Z
+	build	vcs.modified=false
