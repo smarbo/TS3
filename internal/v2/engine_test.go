@@ -178,6 +178,42 @@ func TestUnhealthyMinuteNeverActs(t *testing.T) {
 	}
 }
 
+func TestWideRegimeMakesAllSignalResultsUnavailable(t *testing.T) {
+	e, err := NewEngine("r", DefaultConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC)
+	var at960 *Intent
+	for n := 0; n <= 960; n++ {
+		v, q := tick(start.Add(time.Duration(n)*time.Second), uint64(n+1), 1, 100, "2", "1")
+		if n == 960 {
+			v.BestBid, v.BestAsk = "99.90", "100.10"
+			for level := 0; level < 5; level++ {
+				q.Bids[level].Price = fmt.Sprintf("%.2f", 99.90-float64(level)*0.01)
+				q.Asks[level].Price = fmt.Sprintf("%.2f", 100.10+float64(level)*0.01)
+			}
+		}
+		i, err := e.ApplyTick(v, q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n == 960 {
+			at960 = i
+		}
+	}
+	if at960 == nil || at960.Baseline.Regime != "WIDE" || at960.Action != v1.NoTrade ||
+		at960.ReasonCodes[0] != "REGIME_CONFLICT" || at960.Evidence.UnavailableFamily != 3 {
+		t.Fatalf("wide decision: %+v", at960)
+	}
+	for _, s := range at960.Signals {
+		if s.Status != Unavailable || s.Direction != v1.Flat || s.Reason != "WIDE_REGIME" ||
+			s.SourceBookOrdinal != at960.Baseline.QuoteAsOfOrdinal {
+			t.Fatalf("wide family was not suppressed: %+v", s)
+		}
+	}
+}
+
 func BenchmarkApplyTick(b *testing.B) {
 	e, err := NewEngine("bench", DefaultConfig())
 	if err != nil {

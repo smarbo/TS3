@@ -65,15 +65,16 @@ const (
 )
 
 type SignalResult struct {
-	ID             string    `json:"id"`
-	Status         Status    `json:"status"`
-	Direction      v1.Action `json:"direction"`
-	Score          int64     `json:"score"`
-	ScoreUnit      string    `json:"score_unit"`
-	HorizonSeconds int       `json:"horizon_seconds"`
-	Reason         string    `json:"reason"`
-	AsOfOrdinal    uint64    `json:"as_of_ordinal,string"`
-	Generation     uint64    `json:"generation,string"`
+	ID                string    `json:"id"`
+	Status            Status    `json:"status"`
+	Direction         v1.Action `json:"direction"`
+	Score             int64     `json:"score"`
+	ScoreUnit         string    `json:"score_unit"`
+	HorizonSeconds    int       `json:"horizon_seconds"`
+	Reason            string    `json:"reason"`
+	AsOfOrdinal       uint64    `json:"as_of_ordinal,string"`
+	SourceBookOrdinal uint64    `json:"source_book_ordinal,string"`
+	Generation        uint64    `json:"generation,string"`
 }
 
 type Evidence struct {
@@ -248,6 +249,7 @@ func blankSignal(id, unit string, horizon int, ordinal, generation uint64) Signa
 
 func (e *Engine) pressureSignal(v book.View, q book.Quote, sampleErr error) SignalResult {
 	s := blankSignal("book_pressure.v2.1", "imbalance_ppm", 30, v.Ordinal, q.Generation)
+	s.SourceBookOrdinal = q.LastBookOrdinal
 	if sampleErr != nil {
 		s.Status = Invalid
 		s.Reason = "INVALID_DEPTH"
@@ -310,6 +312,9 @@ func (e *Engine) ApplyTick(v book.View, q book.Quote) (*Intent, error) {
 		blankSignal("reversion.v2.1", "micro_bps", 300, v.Ordinal, q.Generation),
 		blankSignal("book_pressure.v2.1", "imbalance_ppm", 30, v.Ordinal, q.Generation),
 	}
+	for n := range i.Signals {
+		i.Signals[n].SourceBookOrdinal = q.LastBookOrdinal
+	}
 	i.Evidence = Evidence{PriceVote: v1.Flat, BookVote: v1.Flat, Direction: v1.Flat, Disagreement: "UNDEFINED"}
 	i.Opportunity = Opportunity{ReferenceNotionalUSD: baseline.ReferenceNotionalUSD,
 		QuoteAgeMS: baseline.QuoteAgeMS, QuoteGeneration: q.Generation,
@@ -334,6 +339,9 @@ func (e *Engine) ApplyTick(v book.View, q book.Quote) (*Intent, error) {
 	if baseline.Regime == "WIDE" {
 		e.reset()
 		for n := range i.Signals {
+			i.Signals[n].Status = Unavailable
+			i.Signals[n].Direction = v1.Flat
+			i.Signals[n].Score = 0
 			i.Signals[n].Reason = "WIDE_REGIME"
 		}
 		i.Evidence = aggregate(i.Signals)
