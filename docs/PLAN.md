@@ -52,6 +52,8 @@ The initial V1 engineering definitions, deliberately frozen before inspecting ou
 
 ## V2 — Multi-signal engine
 
+**Active branch and frozen core design (2026-09-30).** `main` now contains the accepted V1 merge and annotated tag; `v2` is the active branch. [V2_DESIGN](V2_DESIGN.md), its [adversarial review](V2_DESIGN_REVIEW.md), and [experiment ledger](V2_EXPERIMENT_LEDGER.md) predeclare the core single-feed families, evidence votes, costs, research population and V2 acceptance gate. Public trades, derivatives and cross-market feeds are postponed until a separate global admission/join design and matching historical tape exist. V2 must preserve the frozen V1 benchmark and may finish with zero directional actions.
+
 **Scope.** Add public matches/trades only after a timestamp/gap/backfill design review; implement at most a small number of mechanism-distinct signal families (for example trend, mean reversion, signed-flow). Add family health declarations, disagreement measurement, a simple dependence-aware ensemble, and optional one additional instrument/context source only if its incremental hypothesis is registered. Add available-time-safe joining for any second feed.
 
 **Non-scope.** No large indicator catalogue, complex ML, account/execution features, or unverified alternative data.

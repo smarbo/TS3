@@ -1,6 +1,6 @@
 # Functional and research specification
 
-Status: V0 accepted 2026-09-29; V1 engineering accepted 2026-09-30 on `v1`, pending separate human merge/tag review. No validated predictive or economic strategy result exists.
+Status: V0 and V1 accepted; `main` contains the V1 completion merge and `v2` is the active development branch. V2's single-feed multi-signal design is predeclared in [V2_DESIGN](V2_DESIGN.md). No validated predictive or economic strategy result exists.
 
 ## Purpose and boundary
 

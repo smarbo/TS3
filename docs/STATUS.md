@@ -4,7 +4,7 @@ Updated: 2026-09-30
 
 ## Current phase
 
-**V0 COMPLETE. V1 COMPLETE on branch `v1`, pending separate human merge/tag review.** The official 24-hour-plus public Kraken capture and full replay passed the V0 engineering gate on 2026-09-29. The V1 deterministic baseline passed its engineering gate on 2026-09-30 after two exact full-tape replays and a public live smoke. This establishes a reproducible single-instrument analytical baseline, not provider-side completeness or any predictive/economic edge. No V2–V4 functionality or trading/account code has been added.
+**V0 COMPLETE. V1 COMPLETE and merged into `main`; V2 ACTIVE on `v2`, not accepted.** The official 24-hour-plus public Kraken capture and full replay passed the V0 engineering gate on 2026-09-29. The V1 deterministic baseline passed its engineering gate on 2026-09-30 after two exact full-tape replays and a public live smoke. `main` and `v2` begin at merge commit `7d315ee`; the annotated `v1-complete` tag exists. This establishes a reproducible single-instrument analytical baseline, not provider-side completeness or any predictive/economic edge. No V2–V4 functionality or trading/account code has been added yet.
 
 The official V0 source commit is `d26241151331795cf5005ba09d5f176d1efb6b22` on `v0`. The earlier `main` history containing preacceptance V0 was preserved; the acceptance record belongs on `v0` and is merged into `main` under the milestone branch policy. The run report and final manifest both record the exact clean source commit.
 
@@ -51,7 +51,7 @@ None. V0's engineering acceptance gate is complete. Continue to preserve the off
 
 ## Next implementation slice
 
-No V1 implementation slice remains. The next repository action is separate human review of the accepted `v1` branch; only after that review should `v1` be merged into `main`, an annotated `v1-complete` tag be pushed, and a `v2` branch be created. V2 is technically safe to begin after that branch transition. Do not merge or tag V1 as part of this acceptance task.
+Implement V2-001 from the frozen [V2 design](V2_DESIGN.md) on branch `v2`: versioned family results and a single-owner engine that composes unchanged V1 features, then tests for health, time, disagreement and cost. The [V2 adversarial review](V2_DESIGN_REVIEW.md) has no unresolved high design issue. After implementation, run full-tape replay twice, a warmed public live smoke and exact replay parity, complete the research/audit documents, and accept only if every engineering gate passes. Do not merge/tag V2 or create V3 in this task.
 
 ## V1 implementation and acceptance, 2026-09-30
 

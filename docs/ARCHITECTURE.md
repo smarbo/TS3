@@ -1,6 +1,6 @@
 # Architecture and contracts
 
-Go implementation: V0 is accepted for one instrument; V1's bounded tick-driven baseline is engineering-accepted on `v1`, pending separate human merge/tag review. Later modules remain targets behind explicit contracts. See [SPEC](SPEC.md) for governing invariants, [V1_DESIGN](V1_DESIGN.md) for the frozen baseline, and [PLAN](PLAN.md) for milestone scope.
+Go implementation: V0 and V1 are accepted on `main`; V2 develops on `v2`. The frozen V1 tick-driven engine remains the benchmark. V2's planned single-feed owner path and separate evidence/intent schema are in [V2_DESIGN](V2_DESIGN.md). See [SPEC](SPEC.md) for governing invariants and [PLAN](PLAN.md) for milestone scope.
 
 ## Flow and dependency direction
 
