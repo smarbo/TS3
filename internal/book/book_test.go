@@ -8,6 +8,21 @@ import (
 	"ts3/internal/normalize"
 )
 
+func TestQuoteAccessorIsSortedAndDetached(t *testing.T) {
+	now := time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)
+	s := &State{ready: true, epoch: 2, generation: 2, lastBookOrdinal: 42, lastBook: now,
+		bids: map[string]string{"99": "2", "100": "1"}, asks: map[string]string{"102": "3", "101": "4"}}
+	q := s.Quote()
+	if q.Bids[0].Price != "100" || q.Asks[0].Price != "101" || q.LastBookOrdinal != 42 || !q.LastBookAt.Equal(now) {
+		t.Fatalf("quote order/provenance: %+v", q)
+	}
+	s.bids["100"] = "5"
+	q.Bids[0].Size = "9"
+	if q.Bids[0].Size != "9" || s.bids["100"] != "5" {
+		t.Fatal("quote aliases book state")
+	}
+}
+
 func TestBookHealthReplayAndAtomicInvalidation(t *testing.T) {
 	start := time.Date(2026, 9, 27, 12, 0, 0, 0, time.UTC)
 	n := &normalize.Normalizer{}

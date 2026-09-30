@@ -135,7 +135,8 @@ func (p *Processor) stateDigest() string { return hex.EncodeToString(p.stateHash
 func (p *Processor) Hashes() (string, string) {
 	return hex.EncodeToString(p.normalHash.Sum(nil)), hex.EncodeToString(p.stateHash.Sum(nil))
 }
-func (p *Processor) Last() uint64 { return p.last }
+func (p *Processor) Last() uint64      { return p.last }
+func (p *Processor) Quote() book.Quote { return p.s.Quote() }
 func (p *Processor) Progress() progress.Report {
 	if p.journal == nil {
 		return progress.Report{}

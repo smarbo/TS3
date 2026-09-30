@@ -1,6 +1,6 @@
 # Functional and research specification
 
-Status: design specification, 2026-09-27. No production engine or empirical strategy results exist.
+Status: V0 accepted 2026-09-29; V1 engineering accepted 2026-09-30 on `v1`, pending separate human merge/tag review. No validated predictive or economic strategy result exists.
 
 ## Purpose and boundary
 
