@@ -278,3 +278,35 @@ func TestRandomComparatorMatchesFilteredPolicyFrequency(t *testing.T) {
 		}
 	}
 }
+
+func TestPairedObserverDoesNotChangeFrozenV1Report(t *testing.T) {
+	plain, err := NewResearch("r", DefaultConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	observed, err := NewResearch("r", DefaultConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	observed.ObservePaired(func(p PairedObservation) {
+		count++
+		if p.Intent.AsOfOrdinal != 2 || !p.ExitAt.After(p.EntryAt) {
+			t.Fatalf("bad paired observer event: %+v", p)
+		}
+	})
+	start := time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)
+	addManualDecision(t, plain, start)
+	addManualDecision(t, observed, start)
+	for n := 1; n <= 302; n++ {
+		v, q := fixture(start.Add(time.Duration(n)*time.Second), uint64(n+2), "99", "101")
+		for _, r := range []*Research{plain, observed} {
+			if err := r.ObserveTick(v, q); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if count != 1 || !reflect.DeepEqual(plain.Finalize(), observed.Finalize()) {
+		t.Fatal("downstream observer changed accepted V1 report")
+	}
+}

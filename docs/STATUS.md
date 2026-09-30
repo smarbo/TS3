@@ -4,7 +4,7 @@ Updated: 2026-09-30
 
 ## Current phase
 
-**V0 COMPLETE. V1 COMPLETE and merged into `main`; V2 ACTIVE on `v2`, not accepted.** The official 24-hour-plus public Kraken capture and full replay passed the V0 engineering gate on 2026-09-29. The V1 deterministic baseline passed its engineering gate on 2026-09-30 after two exact full-tape replays and a public live smoke. `main` and `v2` begin at merge commit `7d315ee`; the annotated `v1-complete` tag exists. This establishes a reproducible single-instrument analytical baseline, not provider-side completeness or any predictive/economic edge. No V2–V4 functionality or trading/account code has been added yet.
+**V0 COMPLETE. V1 COMPLETE and merged into `main`; V2 ACTIVE on `v2`, not accepted.** The official 24-hour-plus public Kraken capture and full replay passed the V0 engineering gate on 2026-09-29. The V1 deterministic baseline passed its engineering gate on 2026-09-30 after two exact full-tape replays and a public live smoke. `main` and `v2` began at merge commit `7d315ee`; the annotated `v1-complete` tag exists. V2's public single-feed engine, evaluator and optional live shadow path are implemented but still require full replay and live acceptance evidence. No V3–V4 functionality or trading/account code has been added.
 
 The official V0 source commit is `d26241151331795cf5005ba09d5f176d1efb6b22` on `v0`. The earlier `main` history containing preacceptance V0 was preserved; the acceptance record belongs on `v0` and is merged into `main` under the milestone branch policy. The run report and final manifest both record the exact clean source commit.
 
@@ -51,7 +51,13 @@ None. V0's engineering acceptance gate is complete. Continue to preserve the off
 
 ## Next implementation slice
 
-Implement V2-001 from the frozen [V2 design](V2_DESIGN.md) on branch `v2`: versioned family results and a single-owner engine that composes unchanged V1 features, then tests for health, time, disagreement and cost. The [V2 adversarial review](V2_DESIGN_REVIEW.md) has no unresolved high design issue. After implementation, run full-tape replay twice, a warmed public live smoke and exact replay parity, complete the research/audit documents, and accept only if every engineering gate passes. Do not merge/tag V2 or create V3 in this task.
+Validate the implemented V2-001 slice from the frozen [V2 design](V2_DESIGN.md): run the complete accepted raw tape twice from one clean binary and reconcile V0/V1/V2 hashes, paired cohorts and censoring; then run a warmed public live smoke and replay its raw tape for exact intent parity. Complete [V2_RUNBOOK](V2_RUNBOOK.md), the research report and final adversarial audit before any acceptance verdict. The [design review](V2_DESIGN_REVIEW.md) has no unresolved high issue. Do not merge/tag V2 or create V3 in this task.
+
+## V2 work in progress, 2026-09-30
+
+- The dedicated [design](V2_DESIGN.md), [adversarial review](V2_DESIGN_REVIEW.md) and [pre-outcome ledger](V2_EXPERIMENT_LEDGER.md) were committed at `6c0befacb62f6365fd36dec96d112be7047f8047` before V2 outcomes. Core V2 uses frozen V1 price features, a distinct 30-second displayed-depth pressure family, explicit family availability, a shared price vote versus independent book vote, conflict abstention, and V1 side-correct friction. Derivatives, cross-market and trade-flow modules are postponed.
+- `internal/v2` implements versioned signals, evidence, opportunity, TradeIntent, a bounded serialized owner, downstream cohort evaluator and durable live shadow journal. `cmd/v2research` and collector `-v2` use the same V0 processor and V2 engine. V1's decision path is unchanged; its research evaluator has a nil-by-default read-only paired outcome callback, with a regression test showing identical V1 reports with and without the observer.
+- Focused V1/V2/collector tests and `go vet ./...` pass. A bounded 100,000-ordinal development replay completed with 34 V2 `NO_TRADE` intents, 18 eligible V1 decisions, 13 paired hypothetical episodes, five run-end censored episodes, and zero observer mismatches. It was built from a dirty development checkout (`6c0befa+dirty`) and is an integration check, **not** V2 acceptance evidence. The full clean-commit replays, warmed live smoke, exact parity audit, final validation and report are still required. V2 remains **NOT ACCEPTED**.
 
 ## V1 implementation and acceptance, 2026-09-30
 
