@@ -30,7 +30,7 @@ Run the **same** research binary twice with independent output directories, with
 sha256sum /home/eddie/TS3-v2-eval-{1,2}/intents.jsonl /home/eddie/TS3-v2-eval-{1,2}/report.json
 ```
 
-Check each `report.json`: `full_committed_prefix=true`; valid, committed and processed ordinal `12316574`; zero uncommitted; source manifest and revision match V0; V0 normalized/state SHA-256 match accepted V0; V1 intent SHA-256 matches the frozen V1 benchmark; V2 intent and report files match byte for byte across both runs; `research.observer_mismatches=0`. Reconcile calendar, eligible, paired, censored, family status, action, reason, cohort, fold and comparator counts. Keep the large regenerated V0 files in WSL; archive both reports and V2 canonical intents in `docs/evidence/v2/` after verification.
+Check each `report.json`: `full_committed_prefix=true`; valid, committed and processed ordinal `12316574`; zero uncommitted; source manifest and revision match V0; V0 normalized/state SHA-256 match accepted V0; V1 intent SHA-256 matches the frozen V1 benchmark; V2 intent and report files match byte for byte across both runs; `research.observer_mismatches=0`. Reconcile calendar, eligible, five-minute and separate pressure 30-second paired/censored episodes, family status, action, reason, cohort, fold and comparator counts. Keep the large regenerated V0 files in WSL; archive both reports and V2 canonical intents in `docs/evidence/v2/` after verification.
 
 ## Public live smoke and exact replay
 

@@ -40,6 +40,13 @@ type JournalSnapshot struct {
 	DecisionLatencyMaxNS   int64                     `json:"decision_latency_max_ns"`
 	DecisionLatencyTotalNS int64                     `json:"decision_latency_total_ns"`
 	DecisionLatencySamples int                       `json:"decision_latency_samples"`
+	StageLatency           map[string]LatencySummary `json:"stage_latency"`
+}
+
+type LatencySummary struct {
+	Samples int   `json:"samples"`
+	TotalNS int64 `json:"total_ns"`
+	MaxNS   int64 `json:"max_ns"`
 }
 
 type LiveReport struct {
@@ -118,7 +125,7 @@ func NewJournal(dir, runID string, cfg Config) (*Journal, error) {
 	return &Journal{intents: intents, acks: acks, hash: sha256.New(),
 		snapshot: JournalSnapshot{SchemaVersion: SchemaVersion, RunID: runID, ConfigSHA256: digest,
 			Actions: map[v1.Action]int{}, Reasons: map[string]int{}, SignalStatus: map[string]map[Status]int{},
-			Disagreement: map[string]int{}}}, nil
+			Disagreement: map[string]int{}, StageLatency: map[string]LatencySummary{}}}, nil
 }
 
 func (j *Journal) Append(i Intent, ready time.Time) error {
@@ -166,6 +173,30 @@ func (j *Journal) RecordDecisionLatency(d time.Duration) {
 	j.snapshot.DecisionLatencyTotalNS += ns
 	if ns > j.snapshot.DecisionLatencyMaxNS {
 		j.snapshot.DecisionLatencyMaxNS = ns
+	}
+}
+
+// Begin implements TimingSink for live operational measurements. Only these
+// fixed stage names are recorded, keeping metric cardinality bounded.
+func (j *Journal) Begin(stage string) func() {
+	switch stage {
+	case "v1_baseline", "book_pressure", "trend", "reversion", "aggregate", "opportunity":
+	default:
+		return func() {}
+	}
+	started := time.Now()
+	return func() {
+		ns := time.Since(started).Nanoseconds()
+		if ns < 0 {
+			return
+		}
+		s := j.snapshot.StageLatency[stage]
+		s.Samples++
+		s.TotalNS += ns
+		if ns > s.MaxNS {
+			s.MaxNS = ns
+		}
+		j.snapshot.StageLatency[stage] = s
 	}
 }
 

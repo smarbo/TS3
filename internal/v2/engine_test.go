@@ -48,6 +48,12 @@ func signal(status Status, direction v1.Action) SignalResult {
 	return SignalResult{Status: status, Direction: direction}
 }
 
+type countingTimingSink map[string]int
+
+func (s countingTimingSink) Begin(stage string) func() {
+	return func() { s[stage]++ }
+}
+
 func TestAggregateSeparatesPriceAndBookMechanisms(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -124,7 +130,9 @@ func TestEngineConsensusCostAndFuturePoison(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	var at960 *Intent
+	timings := countingTimingSink{}
+	engines[1].SetTimingSink(timings)
+	var at960, measured960 *Intent
 	for n := 0; n <= 960; n++ {
 		mid := 100.0
 		if n >= 780 {
@@ -139,6 +147,9 @@ func TestEngineConsensusCostAndFuturePoison(t *testing.T) {
 			if n == 960 && index == 0 {
 				at960 = i
 			}
+			if n == 960 && index == 1 {
+				measured960 = i
+			}
 		}
 	}
 	if at960 == nil || at960.Action != v1.Long || at960.Evidence.Reason != "CONSENSUS" ||
@@ -149,6 +160,11 @@ func TestEngineConsensusCostAndFuturePoison(t *testing.T) {
 	before, err := domain.CanonicalJSON(at960)
 	if err != nil {
 		t.Fatal(err)
+	}
+	measuredBytes, err := domain.CanonicalJSON(measured960)
+	if err != nil || !bytes.Equal(before, measuredBytes) || timings["trend"] == 0 ||
+		timings["book_pressure"] != 961 || timings["opportunity"] == 0 {
+		t.Fatalf("live timing observer changed canonical decision: %v %+v", err, timings)
 	}
 	// A later, extreme quote cannot revise an already emitted decision.
 	v, q := tick(start.Add(961*time.Second), 962, 1, 10_000, "1", "2")
@@ -161,6 +177,34 @@ func TestEngineConsensusCostAndFuturePoison(t *testing.T) {
 	}
 	if got := engines[0].configSHA; got == "" || got != engines[1].configSHA {
 		t.Fatal("configuration digest unstable")
+	}
+}
+
+func TestShortConsensusAbstainsWithoutShortMechanism(t *testing.T) {
+	e, err := NewEngine("r", DefaultConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC)
+	var at960 *Intent
+	for n := 0; n <= 960; n++ {
+		mid := 100.0
+		if n >= 780 {
+			mid -= float64(n-780) * 0.012
+		}
+		v, q := tick(start.Add(time.Duration(n)*time.Second), uint64(n+1), 1, mid, "1", "2")
+		i, err := e.ApplyTick(v, q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n == 960 {
+			at960 = i
+		}
+	}
+	if at960 == nil || at960.Evidence.Direction != v1.Short ||
+		!at960.Opportunity.PassesScreen || at960.Action != v1.NoTrade ||
+		at960.ReasonCodes[0] != "SHORT_FEASIBILITY_UNKNOWN" {
+		t.Fatalf("unsupported spot short became actionable: %+v", at960)
 	}
 }
 
@@ -264,6 +308,32 @@ func TestInsufficientExecutableDepthIsNotWarmup(t *testing.T) {
 		at960.Opportunity.Reason != "INVALID_DEPTH" ||
 		at960.Signals[0].Status != Neutral || at960.Signals[1].Status != Neutral {
 		t.Fatalf("depth abstention mislabeled: %+v", at960)
+	}
+}
+
+func TestMalformedPressureDepthIsInvalidNotNeutral(t *testing.T) {
+	e, err := NewEngine("r", DefaultConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC)
+	var at960 *Intent
+	for n := 0; n <= 960; n++ {
+		v, q := tick(start.Add(time.Duration(n)*time.Second), uint64(n+1), 1, 100, "2", "1")
+		if n == 960 {
+			q.Bids[4].Size = "broken"
+		}
+		i, err := e.ApplyTick(v, q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n == 960 {
+			at960 = i
+		}
+	}
+	if at960 == nil || at960.Action != v1.NoTrade || at960.Signals[2].Status != Invalid ||
+		at960.Evidence.Reason != "SIGNAL_INVALID" {
+		t.Fatalf("malformed pressure counted as neutral: %+v", at960)
 	}
 }
 

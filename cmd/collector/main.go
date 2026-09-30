@@ -176,6 +176,7 @@ func run() error {
 			_ = writer.Close(false)
 			return err
 		}
+		analysisV2.SetTimingSink(journalV2)
 		if err := v2.WriteLiveReport(v2ReportPath, v2.LiveReport{Status: "RUNNING", CodeRevision: codeRevision, UpdatedAt: time.Now().UTC(), Journal: journalV2.Snapshot()}); err != nil {
 			_ = journalV2.Close()
 			_ = writer.Close(false)

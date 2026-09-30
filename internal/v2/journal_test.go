@@ -26,6 +26,8 @@ func TestLiveJournalDurableIntentAndOperationalVeto(t *testing.T) {
 		Signals: [3]SignalResult{{ID: "trend.v2.1", Status: Active},
 			{ID: "reversion.v2.1", Status: Neutral}, {ID: "book_pressure.v2.1", Status: Active}}}
 	j.RecordDecisionLatency(3 * time.Millisecond)
+	j.Begin("trend")()
+	j.Begin("unbounded_external_label")()
 	if err := j.Append(i, at); err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +43,8 @@ func TestLiveJournalDurableIntentAndOperationalVeto(t *testing.T) {
 	s := j.Snapshot()
 	if s.Intents != 1 || s.Acknowledged != 1 || s.GateVetoes != 1 ||
 		s.Actions[v1.Long] != 1 || s.SignalStatus["book_pressure.v2.1"][Active] != 1 ||
-		s.DecisionLatencySamples != 1 || s.DecisionLatencyMaxNS != int64(3*time.Millisecond) {
+		s.DecisionLatencySamples != 1 || s.DecisionLatencyMaxNS != int64(3*time.Millisecond) ||
+		s.StageLatency["trend"].Samples != 1 || len(s.StageLatency) != 1 {
 		t.Fatalf("journal snapshot: %+v", s)
 	}
 	f, err := os.Open(filepath.Join(dir, "v2-live-acks.jsonl"))

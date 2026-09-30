@@ -12,14 +12,16 @@ import (
 // endpoint selection and accounting are reused, with a read-only paired hook.
 // Neither this type nor the hook is reachable from the decision engine.
 type Research struct {
-	base           *v1.Research
-	runID          string
-	configSHA      string
-	intents        map[uint64]Intent
-	report         Report
-	lastOrdinal    uint64
-	thesisUntil    time.Time
-	lastThesisSide v1.Action
+	base             *v1.Research
+	runID            string
+	configSHA        string
+	intents          map[uint64]Intent
+	report           Report
+	lastOrdinal      uint64
+	thesisUntil      time.Time
+	lastThesisSide   v1.Action
+	pressurePending  []pressureEpisode
+	lastPressureTick time.Time
 }
 
 type Report struct {
@@ -39,6 +41,10 @@ type Report struct {
 	CohortPolicy        map[string]v1.ResultStats `json:"cohort_policy"`
 	CohortPrice         map[string]v1.ResultStats `json:"cohort_price_hypothetical"`
 	V1Policy            v1.ResultStats            `json:"frozen_v1_policy"`
+	Pressure30Eligible  int                       `json:"pressure_30_eligible"`
+	Pressure30Paired    int                       `json:"pressure_30_paired"`
+	Pressure30Censored  map[string]int            `json:"pressure_30_censored"`
+	Pressure30Controls  map[string]v1.ResultStats `json:"pressure_30_controls"`
 	ObserverMismatches  int                       `json:"observer_mismatches"`
 	Limitations         []string                  `json:"limitations"`
 }
@@ -57,7 +63,8 @@ func NewResearch(runID string, c Config) (*Research, error) {
 			RawActions: map[v1.Action]int{}, SignalStatus: map[string]map[Status]int{},
 			Reasons: map[string]int{}, Disagreement: map[string]int{}, OpportunityReasons: map[string]int{},
 			FamilyHypothetical: map[string]v1.ResultStats{}, CohortPolicy: map[string]v1.ResultStats{},
-			CohortPrice: map[string]v1.ResultStats{},
+			CohortPrice:        map[string]v1.ResultStats{},
+			Pressure30Censored: map[string]int{}, Pressure30Controls: map[string]v1.ResultStats{},
 			Limitations: []string{"One exposed development day; no sealed economic test or calibrated expected edge.",
 				"Displayed depth, fixed fee/allowance, and two-second latency are hypothetical, not fills.",
 				"The pressure family is short-horizon confirmation, not proven independent five-minute alpha."}}}
@@ -69,6 +76,7 @@ func (r *Research) ObserveTick(v book.View, q book.Quote) error {
 	if err := r.base.ObserveTick(v, q); err != nil {
 		return err
 	}
+	r.observePressureTick(v, q)
 	for ordinal, i := range r.intents {
 		if v.AsOf.After(i.AsOfTime.Add(310 * time.Second)) {
 			delete(r.intents, ordinal)
@@ -94,6 +102,7 @@ func (r *Research) AddDecision(i Intent) error {
 	}
 	if i.Baseline.Eligible {
 		r.intents[i.AsOfOrdinal] = i
+		r.addPressureDecision(i)
 	}
 	r.report.RawActions[i.Action]++
 	for _, signal := range i.Signals {
@@ -197,7 +206,7 @@ func (r *Research) onPaired(p v1.PairedObservation) {
 	delete(r.intents, p.Intent.AsOfOrdinal)
 	pairedAdd(r.report.FamilyHypothetical, "trend", i.Signals[0].Direction, p.Long, p.Short)
 	pairedAdd(r.report.FamilyHypothetical, "reversion", i.Signals[1].Direction, p.Long, p.Short)
-	pairedAdd(r.report.FamilyHypothetical, "book_pressure", i.Signals[2].Direction, p.Long, p.Short)
+	pairedAdd(r.report.FamilyHypothetical, "book_pressure_confirmation_300s", i.Signals[2].Direction, p.Long, p.Short)
 	r.report.V1Policy.Add(i.Baseline.Action, p.Long, p.Short)
 	for _, key := range cohortKeys(i) {
 		pairedAdd(r.report.CohortPolicy, key, i.Action, p.Long, p.Short)
@@ -206,6 +215,8 @@ func (r *Research) onPaired(p v1.PairedObservation) {
 }
 
 func (r *Research) Finalize() Report {
+	r.report.Pressure30Censored["RUN_END"] += len(r.pressurePending)
+	r.pressurePending = nil
 	r.report.Evaluator = r.base.Finalize()
 	return r.report
 }

@@ -136,6 +136,22 @@ type Engine struct {
 	previousMinute   time.Time
 	previousReturn   int64
 	previousGen      uint64
+	timing           TimingSink
+}
+
+// TimingSink observes stage durations without returning clock values to the
+// analytical engine. It cannot contribute to a canonical intent.
+type TimingSink interface {
+	Begin(stage string) func()
+}
+
+func (e *Engine) SetTimingSink(s TimingSink) { e.timing = s }
+
+func (e *Engine) begin(stage string) func() {
+	if e.timing == nil {
+		return func() {}
+	}
+	return e.timing.Begin(stage)
 }
 
 func NewEngine(runID string, c Config) (*Engine, error) {
@@ -333,11 +349,15 @@ func baselineUnavailableReason(i v1.Intent) string {
 // ApplyTick has one serialized owner and receives only the current applied tick.
 // The V1 engine is unchanged and remains independently reproducible.
 func (e *Engine) ApplyTick(v book.View, q book.Quote) (*Intent, error) {
+	endBaseline := e.begin("v1_baseline")
 	baseline, err := e.baseline.ApplyTick(v, q)
+	endBaseline()
 	if err != nil {
 		return nil, err
 	}
+	endPressure := e.begin("book_pressure")
 	pressureErr := e.samplePressure(v, q)
+	endPressure()
 	if baseline == nil {
 		return nil, nil
 	}
@@ -406,6 +426,7 @@ func (e *Engine) ApplyTick(v book.View, q book.Quote) (*Intent, error) {
 		return i, nil
 	}
 	minute := v.AsOf.UTC().Truncate(time.Minute)
+	endTrend := e.begin("trend")
 	trend := &i.Signals[0]
 	if !e.previousMinute.IsZero() && e.previousMinute.Equal(minute.Add(-time.Minute)) && e.previousGen == q.Generation {
 		trend.Status = Neutral
@@ -421,6 +442,8 @@ func (e *Engine) ApplyTick(v book.View, q book.Quote) (*Intent, error) {
 		trend.Reason = "PREVIOUS_MINUTE_UNAVAILABLE"
 	}
 	e.previousMinute, e.previousReturn, e.previousGen = minute, f.Return60MicroBps, q.Generation
+	endTrend()
+	endReversion := e.begin("reversion")
 	reversion := &i.Signals[1]
 	reversion.Status = Neutral
 	reversion.Score = -f.DisplacementMicroBps
@@ -434,7 +457,10 @@ func (e *Engine) ApplyTick(v book.View, q book.Quote) (*Intent, error) {
 			reversion.Reason = "DISPLACEMENT"
 		}
 	}
+	endReversion()
+	endAggregate := e.begin("aggregate")
 	i.Evidence = aggregate(i.Signals)
+	endAggregate()
 	if !baseline.Eligible {
 		primary := baselineUnavailableReason(*baseline)
 		i.ReasonCodes = []string{primary}
@@ -452,7 +478,9 @@ func (e *Engine) ApplyTick(v book.View, q book.Quote) (*Intent, error) {
 		proxy = abs(f.DisplacementMicroBps)
 	}
 	i.Opportunity.PastMoveProxyMicroBps = proxy
+	endOpportunity := e.begin("opportunity")
 	friction, err := v1.CurrentRoundTripFriction(q, float64(baseline.ReferenceNotionalUSD)/f.MidUSD, v1.DefaultConfig())
+	endOpportunity()
 	if err != nil {
 		i.Opportunity.Reason = "INVALID_DEPTH"
 		i.ReasonCodes = []string{"INVALID_DEPTH"}
