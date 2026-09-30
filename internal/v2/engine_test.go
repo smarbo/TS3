@@ -178,6 +178,30 @@ func TestUnhealthyMinuteNeverActs(t *testing.T) {
 	}
 }
 
+func TestFutureOrMismatchedQuoteNeverAdmitted(t *testing.T) {
+	at := time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC)
+	for _, corrupt := range []func(*book.View, *book.Quote){
+		func(v *book.View, q *book.Quote) {
+			q.LastBookOrdinal = v.Ordinal + 1
+			v.LastBookOrdinal = q.LastBookOrdinal
+		},
+		func(v *book.View, q *book.Quote) { q.Bids[0].Price = "99.98" },
+		func(v *book.View, q *book.Quote) { q.LastBookAt = at.Add(time.Second) },
+	} {
+		e, err := NewEngine("r", DefaultConfig())
+		if err != nil {
+			t.Fatal(err)
+		}
+		v, q := tick(at, 1, 1, 100, "2", "1")
+		corrupt(&v, &q)
+		i, err := e.ApplyTick(v, q)
+		if err != nil || i == nil || i.Action != v1.NoTrade || i.ReasonCodes[0] != "DATA_UNHEALTHY" ||
+			len(e.pressure) != 0 {
+			t.Fatalf("future/mismatched quote admitted: %+v %v", i, err)
+		}
+	}
+}
+
 func TestWideRegimeMakesAllSignalResultsUnavailable(t *testing.T) {
 	e, err := NewEngine("r", DefaultConfig())
 	if err != nil {
@@ -211,6 +235,35 @@ func TestWideRegimeMakesAllSignalResultsUnavailable(t *testing.T) {
 			s.SourceBookOrdinal != at960.Baseline.QuoteAsOfOrdinal {
 			t.Fatalf("wide family was not suppressed: %+v", s)
 		}
+	}
+}
+
+func TestInsufficientExecutableDepthIsNotWarmup(t *testing.T) {
+	e, err := NewEngine("r", DefaultConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC)
+	var at960 *Intent
+	for n := 0; n <= 960; n++ {
+		size := "2"
+		if n == 960 {
+			size = "0.01"
+		}
+		v, q := tick(start.Add(time.Duration(n)*time.Second), uint64(n+1), 1, 100, size, size)
+		i, err := e.ApplyTick(v, q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n == 960 {
+			at960 = i
+		}
+	}
+	if at960 == nil || at960.Baseline.ReasonCodes[0] != "INVALID_DEPTH" ||
+		at960.Action != v1.NoTrade || at960.ReasonCodes[0] != "INVALID_DEPTH" ||
+		at960.Opportunity.Reason != "INVALID_DEPTH" ||
+		at960.Signals[0].Status != Neutral || at960.Signals[1].Status != Neutral {
+		t.Fatalf("depth abstention mislabeled: %+v", at960)
 	}
 }
 

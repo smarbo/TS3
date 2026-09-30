@@ -162,10 +162,28 @@ func (e *Engine) reset() {
 }
 
 func validQuote(v book.View, q book.Quote) bool {
+	if len(q.Bids) == 0 || len(q.Asks) == 0 ||
+		v.BestBid == "" || v.BestAsk == "" ||
+		q.Bids[0].Price != v.BestBid || q.Asks[0].Price != v.BestAsk {
+		return false
+	}
+	if _, err := domain.Decimal(v.BestBid, false); err != nil {
+		return false
+	}
+	if _, err := domain.Decimal(v.BestAsk, false); err != nil {
+		return false
+	}
+	bid, be := strconv.ParseFloat(v.BestBid, 64)
+	ask, ae := strconv.ParseFloat(v.BestAsk, 64)
+	if be != nil || ae != nil || math.IsNaN(bid) || math.IsNaN(ask) ||
+		math.IsInf(bid, 0) || math.IsInf(ask, 0) || bid <= 0 || bid >= ask {
+		return false
+	}
 	return v.Health == book.Healthy && q.Generation != 0 && q.Generation == v.Generation &&
 		q.Epoch == v.Epoch && q.LastBookOrdinal == v.LastBookOrdinal &&
+		q.LastBookOrdinal > 0 && q.LastBookOrdinal <= v.Ordinal &&
 		!q.LastBookAt.IsZero() && !v.AsOf.Before(q.LastBookAt) &&
-		v.AsOf.Sub(q.LastBookAt) <= 2*time.Second && len(q.Bids) > 0 && len(q.Asks) > 0
+		v.AsOf.Sub(q.LastBookAt) <= 2*time.Second
 }
 
 func levelSize(s string) (float64, error) {
@@ -292,6 +310,26 @@ func abs(n int64) int64 {
 	return n
 }
 
+func baselineUnavailableReason(i v1.Intent) string {
+	if len(i.ReasonCodes) == 0 {
+		return "ANALYSIS_UNAVAILABLE"
+	}
+	switch i.ReasonCodes[0] {
+	case "WARMUP":
+		return "INSUFFICIENT_WARMUP"
+	case "INVALID_DEPTH":
+		return "INVALID_DEPTH"
+	case "INVALID_COST":
+		return "INVALID_COST"
+	case "INVALID_QUOTE", "INVALID_FEATURE", "INVALID_WINDOW":
+		return "SIGNAL_INVALID"
+	case "TICK_TIME_TIE":
+		return "TICK_TIME_TIE"
+	default:
+		return "ANALYSIS_UNAVAILABLE"
+	}
+}
+
 // ApplyTick has one serialized owner and receives only the current applied tick.
 // The V1 engine is unchanged and remains independently reproducible.
 func (e *Engine) ApplyTick(v book.View, q book.Quote) (*Intent, error) {
@@ -326,11 +364,26 @@ func (e *Engine) ApplyTick(v book.View, q book.Quote) (*Intent, error) {
 		return i, nil
 	}
 	i.Signals[2] = e.pressureSignal(v, q, pressureErr)
-	if baseline.Features == nil || !baseline.Eligible {
+	if baseline.Features == nil {
 		i.Evidence = aggregate(i.Signals)
-		i.ReasonCodes = []string{"INSUFFICIENT_WARMUP"}
+		primary := baselineUnavailableReason(*baseline)
+		if primary == "SIGNAL_INVALID" {
+			for n := 0; n < 2; n++ {
+				i.Signals[n].Status = Invalid
+				i.Signals[n].Reason = primary
+			}
+			if len(baseline.ReasonCodes) > 0 && baseline.ReasonCodes[0] == "INVALID_QUOTE" {
+				i.Signals[2].Status = Invalid
+				i.Signals[2].Direction = v1.Flat
+				i.Signals[2].Reason = primary
+			}
+			i.Evidence = aggregate(i.Signals)
+		}
+		i.ReasonCodes = []string{primary}
 		if len(baseline.ReasonCodes) > 0 {
-			i.ReasonCodes = append(i.ReasonCodes, baseline.ReasonCodes[0])
+			if baseline.ReasonCodes[0] != primary {
+				i.ReasonCodes = append(i.ReasonCodes, baseline.ReasonCodes[0])
+			}
 		}
 		return i, nil
 	}
@@ -346,6 +399,10 @@ func (e *Engine) ApplyTick(v book.View, q book.Quote) (*Intent, error) {
 		}
 		i.Evidence = aggregate(i.Signals)
 		i.ReasonCodes = []string{"REGIME_CONFLICT"}
+		if !baseline.Eligible {
+			i.ReasonCodes = []string{baselineUnavailableReason(*baseline)}
+			i.Opportunity.Reason = i.ReasonCodes[0]
+		}
 		return i, nil
 	}
 	minute := v.AsOf.UTC().Truncate(time.Minute)
@@ -378,6 +435,12 @@ func (e *Engine) ApplyTick(v book.View, q book.Quote) (*Intent, error) {
 		}
 	}
 	i.Evidence = aggregate(i.Signals)
+	if !baseline.Eligible {
+		primary := baselineUnavailableReason(*baseline)
+		i.ReasonCodes = []string{primary}
+		i.Opportunity.Reason = primary
+		return i, nil
+	}
 	if i.Evidence.Reason != "CONSENSUS" {
 		i.ReasonCodes = []string{i.Evidence.Reason}
 		return i, nil
