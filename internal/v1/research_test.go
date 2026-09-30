@@ -4,6 +4,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"ts3/internal/book"
 )
 
 func TestEvaluatorUsesFirstQuoteAfterEntryAndExit(t *testing.T) {
@@ -120,6 +122,33 @@ func TestEvaluatorCensorsUnhealthyPath(t *testing.T) {
 	report := r.Finalize()
 	if report.Censored["UNHEALTHY_PATH"] != 1 || report.PairedEpisodes != 0 {
 		t.Fatalf("censor: %+v", report)
+	}
+}
+
+func TestAdverseOutageIsReportedAsCoverageLoss(t *testing.T) {
+	r, err := NewResearch("r", DefaultConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)
+	addManualDecision(t, r, start)
+	for n := 1; n <= 4; n++ {
+		bid, ask := "99", "101"
+		if n == 3 {
+			bid, ask = "79", "81" // adverse price during an unhealthy interval
+		}
+		v, q := fixture(start.Add(time.Duration(n)*time.Second), uint64(n+2), bid, ask)
+		if n == 3 {
+			v.Health = book.Unhealthy
+		}
+		if err := r.ObserveTick(v, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	report := r.Finalize()
+	if report.EligibleDecisions != 1 || report.PairedEpisodes != 0 ||
+		report.Censored["UNHEALTHY_PATH"] != 1 || len(report.Comparators) != 0 {
+		t.Fatalf("adverse outage disappeared from coverage: %+v", report)
 	}
 }
 

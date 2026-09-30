@@ -1,6 +1,6 @@
 # Architecture and contracts
 
-Go implementation: V0 is accepted for one instrument; V1's bounded tick-driven baseline is active on `v1`. Later modules remain targets behind explicit contracts. See [SPEC](SPEC.md) for governing invariants, [V1_DESIGN](V1_DESIGN.md) for the frozen baseline, and [PLAN](PLAN.md) for milestone scope.
+Go implementation: V0 is accepted for one instrument; V1's bounded tick-driven baseline is engineering-accepted on `v1`, pending separate human merge/tag review. Later modules remain targets behind explicit contracts. See [SPEC](SPEC.md) for governing invariants, [V1_DESIGN](V1_DESIGN.md) for the frozen baseline, and [PLAN](PLAN.md) for milestone scope.
 
 ## Flow and dependency direction
 

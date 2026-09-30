@@ -1,6 +1,6 @@
 # Functional and research specification
 
-Status: V0 accepted 2026-09-29; V1 engineering work is active. No validated empirical strategy result exists.
+Status: V0 accepted 2026-09-29; V1 engineering accepted 2026-09-30 on `v1`, pending separate human merge/tag review. No validated predictive or economic strategy result exists.
 
 ## Purpose and boundary
 

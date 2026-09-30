@@ -48,6 +48,8 @@ The initial V1 engineering definitions, deliberately frozen before inspecting ou
 
 **Acceptance/evidence gate.** Engineering invariants pass; the experiment ledger and evaluation protocol are frozen and report uncertainty, trade frequency, coverage, regime breakdown and costs. V1/V2 comparisons use reusable chronological **development** walk-forward folds, not the sealed final period. Proceed to V2 only if baseline behavior and limitations are understood and enough clean data exist; positive returns are not mandatory and cannot be manufactured by retuning an exposed final period.
 
+**V1 gate result (2026-09-30).** The engineering gate passed on `v1` with two byte-identical full-tape replays, accepted V0 hash recovery, a warmed public live smoke with exact V1 intent parity, and an adversarial [final audit](V1_FINAL_AUDIT.md). The policy made zero actions under frozen conservative costs; this is a documented baseline limit, not a profitability result. V2 may be scoped after separate human review merges/tags V1 under the branch policy. This task does not create `v2`, merge `v1`, or tag completion.
+
 ## V2 — Multi-signal engine
 
 **Scope.** Add public matches/trades only after a timestamp/gap/backfill design review; implement at most a small number of mechanism-distinct signal families (for example trend, mean reversion, signed-flow). Add family health declarations, disagreement measurement, a simple dependence-aware ensemble, and optional one additional instrument/context source only if its incremental hypothesis is registered. Add available-time-safe joining for any second feed.
