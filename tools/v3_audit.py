@@ -26,6 +26,25 @@ def stamp(value):
     return dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
+def sigmoid(value):
+    if value >= 0:
+        z = math.exp(-value)
+        return 1 / (1 + z)
+    z = math.exp(value)
+    return z / (1 + z)
+
+
+def metrics(rows, scores):
+    losses = [math.log1p(math.exp(-abs(s))) + max(0, -s if r["depth_up"] else s)
+              for r, s in zip(rows, scores)]
+    briers = [(sigmoid(s) - float(r["depth_up"])) ** 2 for r, s in zip(rows, scores)]
+    return sum(losses) / len(rows), sum(briers) / len(rows)
+
+
+def close(actual, expected, label):
+    require(math.isclose(actual, expected, rel_tol=1e-9, abs_tol=1e-10), label)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("dataset", type=Path)
@@ -88,6 +107,9 @@ def main():
             not training["calibration_count_gate"], "unsupported calibrated artifact")
     require(len(training["folds"]) == 5, "fold count")
     previous_validation_end = None
+    prior_embargo = []
+    totals = collections.defaultdict(float)
+    total_validation = 0
     for fold in training["folds"]:
         start, end = stamp(fold["validation_start"]), stamp(fold["validation_end"])
         cutoff = stamp(fold["train_cutoff"])
@@ -108,6 +130,46 @@ def main():
         require(int(val[0]["decision_ordinal"]) == int(fold["validation_first_ordinal"]) and
                 int(val[-1]["decision_ordinal"]) == int(fold["validation_last_ordinal"]),
                 f"fold {fold['index']} ordinal range")
+        train = [r for r in rows if stamp(r["decision_time"]) < cutoff and
+                 stamp(r["exit_time"]) < start and
+                 not any(a <= stamp(r["decision_time"]) < b for a, b in prior_embargo)]
+        require(len(train) == fold["train_rows"] and
+                int(train[-1]["decision_ordinal"]) == int(fold["train_last_ordinal"]) and
+                sum(r["depth_up"] for r in train) == fold["train_positive"] and
+                max(stamp(r["exit_time"]) for r in train) == stamp(fold["train_max_label_exit"]),
+                f"fold {fold['index']} train/purge/embargo mismatch")
+        p = (sum(r["depth_up"] for r in train) + 1) / (len(train) + 2)
+        base_score = math.log(p / (1 - p))
+        null_loss, null_brier = metrics(val, [base_score] * len(val))
+        close(null_loss, fold["null"]["log_loss"], "null log loss")
+        close(null_brier, fold["null"]["brier"], "null Brier")
+        for penalty in (1, 10):
+            mean = [sum(r["features"][j] for r in train) / len(train) for j in range(7)]
+            scale = [math.sqrt(sum((r["features"][j]-mean[j])**2 for r in train) / len(train))
+                     for j in range(7)]
+            scale = [v or 1.0 for v in scale]
+            beta = fold[f"coefficients_lambda_{penalty}"]
+            require(len(beta) == 8 and all(math.isfinite(v) for v in beta),
+                    "invalid fold coefficients")
+            scores = [beta[0] + sum(beta[j+1]*(r["features"][j]-mean[j])/scale[j]
+                                    for j in range(7)) for r in val]
+            loss, brier = metrics(val, scores)
+            close(loss, fold[f"logistic_lambda_{penalty}"]["log_loss"], "logistic log loss")
+            close(brier, fold[f"logistic_lambda_{penalty}"]["brier"], "logistic Brier")
+            totals[f"lambda_{penalty}"] += loss * len(val)
+            totals[f"lambda_{penalty}_brier"] += brier * len(val)
+        totals["null"] += null_loss * len(val)
+        totals["null_brier"] += null_brier * len(val)
+        total_validation += len(val)
+        prior_embargo.append((end, stamp(fold["embargo_end"])))
+    for name in ("null", "lambda_1", "lambda_10"):
+        close(totals[name] / total_validation, training["aggregate_log_loss"][name],
+              f"aggregate {name} log loss")
+        close(totals[f"{name}_brier"] / total_validation, training["aggregate_brier"][name],
+              f"aggregate {name} Brier")
+    selected = f"lambda_{int(training['selected_development_lambda'])}"
+    close(training["aggregate_log_loss"][selected] - training["aggregate_log_loss"]["null"],
+          training["selected_minus_null_log_loss"], "selected comparison")
     print(json.dumps({"dataset_sha256": digest, "rows": len(rows), "depth_up": positive,
                       "long_net_positive": net_positive, "regimes": dict(regimes),
                       "selected_lambda": training["selected_development_lambda"],
