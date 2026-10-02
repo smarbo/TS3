@@ -396,7 +396,7 @@ func run() error {
 		V1ConfigSHA: rows[0].V1ConfigSHA, V2ConfigSHA: rows[0].V2ConfigSHA,
 		DatasetSHA: source.DatasetSHA, TrainingRunID: source.SourceRunID,
 		TrainingRevision: revision(),
-		TrainingStart: rows[0].DecisionTime, TrainingEnd: lastLabelExit,
+		TrainingStart:    rows[0].DecisionTime, TrainingEnd: lastLabelExit,
 		LastTrainOrdinal: rows[len(rows)-1].DecisionOrdinal, TrainingRows: len(rows),
 		Lambda: result.SelectedLambda, Mean: s.Mean, Scale: s.Scale,
 		Intercept: beta[0], CalibrationStatus: "UNAVAILABLE_INSUFFICIENT_EVIDENCE"}

@@ -17,7 +17,7 @@ func inferenceArtifact(t *testing.T) Artifact {
 		FeatureSchema: FeatureSchema, FeatureNames: FeatureNames,
 		TargetVersion: TargetVersion, CostVersion: CostVersion,
 		V1ConfigSHA: "v1", V2ConfigSHA: "v2", DatasetSHA: "dataset",
-		TrainingRunID: "historical-training-run",
+		TrainingRunID:    "historical-training-run",
 		TrainingRevision: "commit", TrainingStart: start, TrainingEnd: start.Add(time.Hour),
 		LastTrainOrdinal: 100, TrainingRows: 100, Lambda: 1,
 		CalibrationStatus: "UNAVAILABLE_INSUFFICIENT_EVIDENCE"}

@@ -46,7 +46,7 @@ func TestInSampleCalibrationIllusionFailsLater(t *testing.T) {
 		return OOFPrediction{DecisionOrdinal: uint64(index + 1), DecisionTime: at,
 			ExitTime: at.Add(5 * time.Minute), ValidationStart: at.Truncate(2 * time.Hour),
 			ValidationEnd: at.Truncate(2 * time.Hour).Add(2 * time.Hour),
-			TrainMaxExit: start.Add(-time.Minute), Fold: 0,
+			TrainMaxExit:  start.Add(-time.Minute), Fold: 0,
 			Score: float64(index%2)*4 - 2, Label: label}
 	}
 	var early, later []OOFPrediction
