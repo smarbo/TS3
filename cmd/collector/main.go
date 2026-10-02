@@ -33,6 +33,7 @@ import (
 	"ts3/internal/telemetry"
 	"ts3/internal/v1"
 	"ts3/internal/v2"
+	"ts3/internal/v3"
 	"ts3/internal/watchdog"
 )
 
@@ -54,12 +55,29 @@ func run() error {
 	endpoint := flag.String("endpoint", kraken.Endpoint, "public WebSocket endpoint")
 	enableV1 := flag.Bool("v1", false, "write V1 shadow analytical intents alongside V0 capture")
 	enableV2 := flag.Bool("v2", false, "write V2 shadow multi-signal intents alongside V0 capture")
+	v3ArtifactPath := flag.String("v3-artifact", "", "verified V3 research artifact for read-only shadow inference")
 	flag.Parse()
 	if *runID == "" {
 		*runID = time.Now().UTC().Format("20060102T150405Z")
 	}
 	if *duration < 0 {
 		return errors.New("negative duration")
+	}
+	var artifactV3 *v3.Artifact
+	if *v3ArtifactPath != "" {
+		v1Digest, err := v1.DefaultConfig().Digest()
+		if err != nil {
+			return err
+		}
+		v2Digest, err := v2.DefaultConfig().Digest()
+		if err != nil {
+			return err
+		}
+		loaded, err := v3.LoadArtifact(*v3ArtifactPath, v1Digest, v2Digest)
+		if err != nil {
+			return fmt.Errorf("load V3 artifact: %w", err)
+		}
+		artifactV3 = &loaded
 	}
 	configBytes, err := domain.CanonicalJSON(struct {
 		Endpoint      string   `json:"endpoint"`
@@ -165,26 +183,48 @@ func run() error {
 	var journalV2 *v2.Journal
 	v2ReportPath := filepath.Join(outputDir, "v2-report.json")
 	v2JournalClosed := false
-	if *enableV2 {
+	if *enableV2 || artifactV3 != nil {
 		analysisV2, err = v2.NewEngine(*runID, v2.DefaultConfig())
 		if err != nil {
 			_ = writer.Close(false)
 			return err
 		}
-		journalV2, err = v2.NewJournal(outputDir, *runID, v2.DefaultConfig())
+		if *enableV2 {
+			journalV2, err = v2.NewJournal(outputDir, *runID, v2.DefaultConfig())
+			if err != nil {
+				_ = writer.Close(false)
+				return err
+			}
+			analysisV2.SetTimingSink(journalV2)
+			if err := v2.WriteLiveReport(v2ReportPath, v2.LiveReport{Status: "RUNNING", CodeRevision: codeRevision, UpdatedAt: time.Now().UTC(), Journal: journalV2.Snapshot()}); err != nil {
+				_ = journalV2.Close()
+				_ = writer.Close(false)
+				return err
+			}
+			defer func() {
+				if !v2JournalClosed {
+					_ = journalV2.Close()
+				}
+			}()
+		}
+	}
+	var journalV3 *v3.Journal
+	v3ReportPath := filepath.Join(outputDir, "v3-report.json")
+	v3JournalClosed := false
+	if artifactV3 != nil {
+		journalV3, err = v3.NewJournal(outputDir, *runID, *artifactV3)
 		if err != nil {
 			_ = writer.Close(false)
 			return err
 		}
-		analysisV2.SetTimingSink(journalV2)
-		if err := v2.WriteLiveReport(v2ReportPath, v2.LiveReport{Status: "RUNNING", CodeRevision: codeRevision, UpdatedAt: time.Now().UTC(), Journal: journalV2.Snapshot()}); err != nil {
-			_ = journalV2.Close()
+		if err := v3.WriteLiveReport(v3ReportPath, v3.LiveReport{Status: "RUNNING", CodeRevision: codeRevision, UpdatedAt: time.Now().UTC(), Journal: journalV3.Snapshot()}); err != nil {
+			_ = journalV3.Close()
 			_ = writer.Close(false)
 			return err
 		}
 		defer func() {
-			if !v2JournalClosed {
-				_ = journalV2.Close()
+			if !v3JournalClosed {
+				_ = journalV3.Close()
 			}
 		}()
 	}
@@ -304,6 +344,10 @@ func run() error {
 			intent v2.Intent
 			ready  time.Time
 		}, 0, 2)
+		v3Pending := make([]struct {
+			intent v3.Intent
+			ready  time.Time
+		}, 0, 2)
 		began := time.Now()
 		if err := writer.AppendBatch(batch); err != nil {
 			return err
@@ -333,15 +377,25 @@ func run() error {
 			if analysisV2 != nil && r.Kind == domain.ClockTick {
 				decisionStart := time.Now()
 				intent, err := analysisV2.ApplyTick(v, proc.Quote())
-				journalV2.RecordDecisionLatency(time.Since(decisionStart))
+				if journalV2 != nil {
+					journalV2.RecordDecisionLatency(time.Since(decisionStart))
+				}
 				if err != nil {
 					return err
 				}
 				if intent != nil {
-					v2Pending = append(v2Pending, struct {
-						intent v2.Intent
-						ready  time.Time
-					}{*intent, time.Now().UTC()})
+					if journalV2 != nil {
+						v2Pending = append(v2Pending, struct {
+							intent v2.Intent
+							ready  time.Time
+						}{*intent, time.Now().UTC()})
+					}
+					if artifactV3 != nil {
+						v3Pending = append(v3Pending, struct {
+							intent v3.Intent
+							ready  time.Time
+						}{v3.EvaluateIntent(*intent, artifactV3), time.Now().UTC()})
+					}
 				}
 			}
 			lastView = v
@@ -398,6 +452,19 @@ func run() error {
 				return errors.New("V2 shadow journal lag exceeded one second")
 			}
 		}
+		if journalV3 != nil {
+			for _, pending := range v3Pending {
+				if err := journalV3.Append(pending.intent, pending.ready); err != nil {
+					return err
+				}
+			}
+			if err := journalV3.Flush(gate.Open()); err != nil {
+				return err
+			}
+			if time.Since(began) > time.Second {
+				return errors.New("V3 shadow journal lag exceeded one second")
+			}
+		}
 		for _, ack := range acks {
 			if ack != nil {
 				ack <- nil
@@ -429,6 +496,9 @@ func run() error {
 					}
 					if journalV2 != nil {
 						_ = v2.WriteLiveReport(v2ReportPath, v2.LiveReport{Status: "INCOMPLETE", CodeRevision: codeRevision, UpdatedAt: time.Now().UTC(), Journal: journalV2.Snapshot()})
+					}
+					if journalV3 != nil {
+						_ = v3.WriteLiveReport(v3ReportPath, v3.LiveReport{Status: "INCOMPLETE", CodeRevision: codeRevision, UpdatedAt: time.Now().UTC(), Journal: journalV3.Snapshot()})
 					}
 					writer.SetProvenance(provenance())
 					_ = writer.Close(false)
@@ -483,6 +553,13 @@ func run() error {
 					}
 					v2JournalClosed = true
 				}
+				if journalV3 != nil {
+					if err := journalV3.Close(); err != nil {
+						clean = false
+						slog.Error("V3 journal close failed", "error", err)
+					}
+					v3JournalClosed = true
+				}
 				writer.SetProvenance(provenance())
 				if err := writer.Close(clean); err != nil {
 					return err
@@ -502,6 +579,11 @@ func run() error {
 				if journalV2 != nil {
 					if err := v2.WriteLiveReport(v2ReportPath, v2.LiveReport{Status: string(reportStatus), CodeRevision: codeRevision, UpdatedAt: time.Now().UTC(), Journal: journalV2.Snapshot()}); err != nil {
 						return fmt.Errorf("final V2 report: %w", err)
+					}
+				}
+				if journalV3 != nil {
+					if err := v3.WriteLiveReport(v3ReportPath, v3.LiveReport{Status: string(reportStatus), CodeRevision: codeRevision, UpdatedAt: time.Now().UTC(), Journal: journalV3.Snapshot()}); err != nil {
+						return fmt.Errorf("final V3 report: %w", err)
 					}
 				}
 				nh, sh := proc.Hashes()
@@ -596,6 +678,15 @@ func run() error {
 					clean = false
 					gate.Fail()
 					slog.Error("V2 report failed", "error", err)
+					cancel()
+				}
+			}
+			if journalV3 != nil && pipelineErr == nil {
+				if err := v3.WriteLiveReport(v3ReportPath, v3.LiveReport{Status: "RUNNING", CodeRevision: codeRevision, UpdatedAt: time.Now().UTC(), Journal: journalV3.Snapshot()}); err != nil {
+					pipelineErr = fmt.Errorf("periodic V3 report: %w", err)
+					clean = false
+					gate.Fail()
+					slog.Error("V3 report failed", "error", err)
 					cancel()
 				}
 			}

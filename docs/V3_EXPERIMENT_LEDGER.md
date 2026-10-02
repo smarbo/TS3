@@ -11,3 +11,5 @@ Created 2026-10-02 before V3 modelling outcomes. The accepted V0/V1/V2 tape is e
 | V3-001-R | Strongly regularized ridge for long net bps only if folds support it; diagnostic, no probability claim | Conditional |
 
 Hypothesis count at design freeze: one primary target, seven features, one null and two logistic penalties, six disclosed ablations, zero threshold sweep, zero trees. The secondary net-positive label is descriptive only. Any changed feature, label, cost, metric or model after inspecting this tape is a new exposed-data variant, not an untouched confirmation.
+
+**Pre-outcome implementation clarification:** the logistic penalty applies to the sum of fold training losses, not their mean; the intercept is unpenalized. A fixed 50-step full-batch Newton solver, training-only standardization and exact artifact/feature range checks implement that contract. The seven columns, targets, folds, two penalties, costs and selection metric are unchanged. This clarification and all associated code were written while the first full V3 row export was still running; no V3 row labels or model outcomes had been inspected.

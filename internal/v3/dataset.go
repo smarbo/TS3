@@ -66,46 +66,11 @@ func FromPaired(i v2.Intent, p v1.PairedObservation, sourceManifestSHA string) (
 		*i.Baseline.Features != *p.Intent.Features {
 		return Row{}, false, errors.New("V3 baseline feature mismatch")
 	}
-	for _, s := range i.Signals {
-		if s.AsOfOrdinal > i.AsOfOrdinal || s.SourceBookOrdinal > i.AsOfOrdinal ||
-			s.Generation != p.Intent.QuoteGeneration {
-			return Row{}, false, errors.New("V3 future/cross-generation signal")
-		}
-	}
-	if i.Signals[2].Status != v2.Active && i.Signals[2].Status != v2.Neutral {
-		return Row{}, false, nil
-	}
-	if p.Intent.Regime != "NORMAL" && p.Intent.Regime != "VOLATILE" {
-		return Row{}, false, nil
-	}
-	disagreement := -1.0
-	switch i.Evidence.Disagreement {
-	case "UNDEFINED":
-	case "0":
-		disagreement = 0
-	case "1":
-		disagreement = 1
-	default:
-		return Row{}, false, fmt.Errorf("unknown disagreement %q", i.Evidence.Disagreement)
+	features, available, err := FeaturesFromIntent(i)
+	if err != nil || !available {
+		return Row{}, available, err
 	}
 	f := p.Intent.Features
-	features := [7]float64{
-		float64(f.Return60MicroBps) / 1e6,
-		float64(f.DisplacementMicroBps) / 1e6,
-		float64(f.RMS900MicroBps) / 1e6,
-		float64(f.SpreadMicroBps) / 1e6,
-		float64(i.Signals[2].Score) / 1e6,
-		0,
-		disagreement,
-	}
-	if p.Intent.Regime == "VOLATILE" {
-		features[5] = 1
-	}
-	for _, value := range features {
-		if math.IsNaN(value) || math.IsInf(value, 0) {
-			return Row{}, false, errors.New("nonfinite V3 feature")
-		}
-	}
 	row := Row{SchemaVersion: 1, FeatureSchema: FeatureSchema, TargetVersion: TargetVersion,
 		CostVersion: CostVersion, SourceManifestSHA: sourceManifestSHA, RunID: i.RunID,
 		DecisionOrdinal: i.AsOfOrdinal, DecisionTime: i.AsOfTime, EntryTime: p.EntryAt,
@@ -120,4 +85,54 @@ func FromPaired(i v2.Intent, p v1.PairedObservation, sourceManifestSHA string) (
 		V2Action: i.Action, MomentumDirection: p.Intent.Momentum.Direction,
 		ReversionDirection: p.Intent.MeanReversion.Direction}
 	return row, true, nil
+}
+
+// FeaturesFromIntent is the exact causal feature mapping shared by offline
+// row export and live/replay inference. It never sees a future outcome.
+func FeaturesFromIntent(i v2.Intent) ([7]float64, bool, error) {
+	if i.AsOfOrdinal == 0 || i.Baseline.AsOfOrdinal != i.AsOfOrdinal ||
+		!i.Baseline.AsOfTime.Equal(i.AsOfTime) ||
+		i.Baseline.QuoteAsOfOrdinal > i.AsOfOrdinal {
+		return [7]float64{}, false, errors.New("V3 intent as-of provenance mismatch")
+	}
+	for _, s := range i.Signals {
+		if s.AsOfOrdinal > i.AsOfOrdinal || s.SourceBookOrdinal > i.AsOfOrdinal ||
+			s.Generation != i.Baseline.QuoteGeneration {
+			return [7]float64{}, false, errors.New("V3 future/cross-generation signal")
+		}
+	}
+	if i.Baseline.Features == nil || !i.Baseline.Eligible ||
+		(i.Baseline.Regime != "NORMAL" && i.Baseline.Regime != "VOLATILE") ||
+		(i.Signals[2].Status != v2.Active && i.Signals[2].Status != v2.Neutral) {
+		return [7]float64{}, false, nil
+	}
+	disagreement := -1.0
+	switch i.Evidence.Disagreement {
+	case "UNDEFINED":
+	case "0":
+		disagreement = 0
+	case "1":
+		disagreement = 1
+	default:
+		return [7]float64{}, false, fmt.Errorf("unknown disagreement %q", i.Evidence.Disagreement)
+	}
+	f := i.Baseline.Features
+	features := [7]float64{
+		float64(f.Return60MicroBps) / 1e6,
+		float64(f.DisplacementMicroBps) / 1e6,
+		float64(f.RMS900MicroBps) / 1e6,
+		float64(f.SpreadMicroBps) / 1e6,
+		float64(i.Signals[2].Score) / 1e6,
+		0,
+		disagreement,
+	}
+	if i.Baseline.Regime == "VOLATILE" {
+		features[5] = 1
+	}
+	for _, value := range features {
+		if math.IsNaN(value) || math.IsInf(value, 0) {
+			return [7]float64{}, false, errors.New("nonfinite V3 feature")
+		}
+	}
+	return features, true, nil
 }

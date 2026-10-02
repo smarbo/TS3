@@ -51,7 +51,7 @@ None. V0's engineering acceptance gate is complete. Continue to preserve the off
 
 ## Next milestone action
 
-Implement the frozen V3 row export and chronological training/evaluation pipeline on `v3`, beginning with exact primary-target class balance and repeated dataset hashes. The V3 design is frozen before model-outcome inspection. The one-day development tape may support engineering tests and exploratory walk-forward comparisons, but final acceptance requires the separately frozen future period in [V3_SEALED_TEST_PROTOCOL](V3_SEALED_TEST_PROTOCOL.md). Do not merge/tag V3 or start V4 in this task.
+Complete and audit the full V3 row export, then run the preregistered chronological model comparison from a clean committed binary. The export started from clean checkpoint `030548a` before V3 model outcomes were available. The shared training, artifact, and shadow-inference code is under implementation and has focused tests; no development model result has been inspected yet. The one-day development tape may support engineering tests and exploratory walk-forward comparisons, but final acceptance requires the separately frozen future period in [V3_SEALED_TEST_PROTOCOL](V3_SEALED_TEST_PROTOCOL.md). Do not merge/tag V3 or start V4 in this task.
 
 ## V2 implementation checkpoints, 2026-09-30
 
