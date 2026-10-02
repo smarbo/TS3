@@ -1,6 +1,6 @@
 # Architecture and contracts
 
-Go implementation: V0 is accepted for one instrument; V1's bounded tick-driven baseline is engineering-accepted on `v1`, pending separate human merge/tag review. Later modules remain targets behind explicit contracts. See [SPEC](SPEC.md) for governing invariants, [V1_DESIGN](V1_DESIGN.md) for the frozen baseline, and [PLAN](PLAN.md) for milestone scope.
+Go implementation: V0 and V1 are accepted on `main`; V2 engineering acceptance is complete on `v2`, pending separate human merge/tag. The frozen V1 tick-driven engine remains the benchmark. V2's implemented single-feed owner path and separate evidence/intent schema are in [V2_DESIGN](V2_DESIGN.md), with completed parity evidence in [V2_FINAL_AUDIT](V2_FINAL_AUDIT.md). See [SPEC](SPEC.md) for governing invariants and [PLAN](PLAN.md) for milestone scope.
 
 ## Flow and dependency direction
 
@@ -49,6 +49,14 @@ type TickAnalysis interface {
 ```
 
 The Kraken socket producer stamps completed frames; the ingress coordinator assigns ordinals and the writer commits them before the collector calls `Processor.Apply`. `ReplaySource.Next` reads already numbered, validated committed records and calls that same `Processor.Apply`; it does not re-record, renumber, decode, or precompute features. This is the implemented V0 live/replay parity boundary. The processor receives only one raw record at a time and recorded `ClockTick`s; it cannot access a future iterator, live network, or manifest metadata as a market input. `io.EOF` means the end of the verified committed prefix; the recovery report separately states whether a run ended cleanly. A corrupt committed frame with a clean manifest is an error. An unclean run may retain a verified earlier commit while reporting and excluding a torn tail.
+
+## V2 single-owner analytical extension
+
+The optional `-v2` collector path calls `v2.Engine.ApplyTick` on the serialized owner after the same committed tick and V0 processor as replay. The V2 engine embeds an unchanged V1 engine for its frozen feature/benchmark snapshot, then samples distinct current-generation book updates into a bounded 30-second pressure window. Three versioned family results occupy two voting mechanisms: one shared price slot for trend/reversion and one book-depth slot. The V2 intent has a separate schema and config digest; the existing V1 path and accepted V0 canonical state bytes are unchanged. No second feed, global join, or outcome handle is admitted into the engine.
+
+`v2.Research` is downstream from immutable V2 intents. It uses the accepted V1 research evaluator's exact post-boundary endpoints and side-correct costs through a read-only paired-observation callback; the default nil callback leaves V1 report bytes unchanged. A separate 30-second evaluator tests the book-pressure horizon under the same entry/exit and health rules. Cohort, hypothetical family and thesis-deduplication state cannot influence V2 decisions. The live V2 journal fsyncs canonical intent bytes before separate acknowledgments, exposes bounded-cardinality family/reason/disagreement counts, aggregate decision timing and fixed-stage timing summaries, and uses the same independent live watchdog veto as V1. Its timing sink returns no clock value to the analysis engine and cannot alter canonical intent bytes. See [V2_DESIGN](V2_DESIGN.md) and [V2_RUNBOOK](V2_RUNBOOK.md).
+
+Engineering acceptance used clean analysis commit `5d1647386fe935412a68b333514858f6b2039d0f`: two independent full accepted-tape replays produced byte-identical V2 intents/reports and recovered V0/V1 hashes; a 65-minute public capture produced 67 durable V2 intents whose bytes exactly matched its raw replay. The policy made no directional actions on either dataset. The implementation does not claim that displayed depth is executed order flow, that the two price families are statistically independent, or that any candidate survives costs. Large raw/regenerated tapes remain in WSL; small reports, journals and hashes are archived in [evidence/v2](evidence/v2/evidence-manifest.json).
 
 ## V0 capture, replay, and clock contract
 

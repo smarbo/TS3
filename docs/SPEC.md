@@ -1,6 +1,6 @@
 # Functional and research specification
 
-Status: V0 accepted 2026-09-29; V1 engineering accepted 2026-09-30 on `v1`, pending separate human merge/tag review. No validated predictive or economic strategy result exists.
+Status: V0, V1 and V2 engineering milestones are accepted. `main` still contains the V1 completion merge; the completed V2 work and evidence remain on `v2` pending the separate human merge/tag workflow. V2's frozen single-feed contract is in [V2_DESIGN](V2_DESIGN.md) and its acceptance evidence in [V2_FINAL_AUDIT](V2_FINAL_AUDIT.md). No validated predictive or economic strategy result exists.
 
 ## Purpose and boundary
 
@@ -14,6 +14,10 @@ The repository must never contain exchange account authentication, private APIs,
 2. **Availability, not event-time clairvoyance.** State evaluated at logical time T may depend only on records whose `UsableFromTime <= T` and that have already entered the serialized stream. `ReceiveTime` is observation at the socket, while `AdmissionTime` is the serialized ingress point; V0 `UsableFromTime` is no earlier than `AdmissionTime`. Exchange `EventTime` may be earlier than either and never grants earlier access. A snapshot with no exchange timestamp has unknown `EventTime`, not a fabricated one. Publication time is separate when a source supplies it. Replay must never hand a future-complete dataset, final run manifest as a market side input, or unrestricted historical query to analytical components.
 3. **Deterministic order.** Preserve recorder ordinal, including control events and clock ticks. A tie in timestamps is resolved by ordinal. Calculations use specified numeric/rounding rules, stable iteration order, frozen configuration, and versioned schemas. Any nondeterministic model or parallel computation must have a reproducibility contract before use.
 4. **Health is input.** A required feed that is disconnected, stale, invalid, or in a gap makes dependent signals unavailable. Unknown is distinct from zero. No stale last-known quote is silently treated as current. Severe uncertainty defaults to `NO_TRADE` with reason codes.
+
+## Accepted V2 analytical contract
+
+The single public Kraken BTC/USD book and recorded ticks remain sufficient. V2 preserves the V1 feature snapshot and adds three versioned results: 60-second return persistence (`trend.v2.1`), 300-second midpoint displacement reversion (`reversion.v2.1`), and persistent top-five displayed-depth imbalance (`book_pressure.v2.1`). Trend and reversion share one price-mechanism vote; book pressure supplies one separate 30-second confirmation vote and is evaluated at that horizon. Each family reports `ACTIVE`, `NEUTRAL`, `UNAVAILABLE`, or `INVALID` with a reason, horizon and ordinal/generation provenance. Both mechanism votes must actively agree for a candidate direction; conflict and missing diversity are explicit abstention reasons. `WIDE` quote regime suppresses all three families. The opportunity screen uses the V1 USD 100 side-correct displayed-depth cost, 20-bp taker fee and 5-bp allowance per side, plus a fixed 10-bp margin. Its observed past-move magnitude is a screening proxy, not calibrated expected return. Default spot configuration cannot issue `SHORT` without a documented short mechanism. No trades, optional second feed, private account function, probability model or execution path was added. See the [research report](V2_RESEARCH_REPORT.md) for the zero-action development result and its limits.
 
 ## Time and information rules
 

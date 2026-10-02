@@ -1,0 +1,2 @@
+2026/09/30 20:15:06 INFO book healthy ordinal=29 epoch=1
+2026/09/30 21:21:11 INFO capture finished run=v2-smoke-5d16473-20260930T191500Z committed=422062 normalized_sha256=27d935f2c8ef3fe9bd56f797a53312c8401248c2462bdbd65b21a34227b5ba6b state_sha256=9a48d00a1b0871c99c1ab9e240906bb955e37fbbd312bd087d94e82cb5be1e64 gate_open=false go=go1.27.0

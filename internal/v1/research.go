@@ -86,12 +86,29 @@ type episode struct {
 	exitAfter  time.Time
 }
 
+// PairedObservation exposes the already selected, side-correct hypothetical
+// endpoints to a downstream research consumer. It is never fed to an engine.
+type PairedObservation struct {
+	Intent  Intent
+	EntryAt time.Time
+	ExitAt  time.Time
+	Long    Outcome
+	Short   Outcome
+}
+
 type Research struct {
 	config              Config
 	report              Report
 	pending             []episode
 	blocks              map[int64]map[string]blockSum
 	lastDecisionOrdinal uint64
+	pairedObserver      func(PairedObservation)
+}
+
+// ObservePaired adds a downstream-only observer. A nil observer preserves the
+// accepted V1 report and intent behavior byte for byte.
+func (r *Research) ObservePaired(fn func(PairedObservation)) {
+	r.pairedObserver = fn
 }
 
 func NewResearch(runID string, config Config) (*Research, error) {
@@ -226,6 +243,10 @@ func (r *Research) complete(p episode, exit book.Quote, exitTime time.Time) erro
 	short, err := EvaluateSide(p.entry, exit, p.quantity, Short, shortConfig, holding)
 	if err != nil {
 		return err
+	}
+	if r.pairedObserver != nil {
+		r.pairedObserver(PairedObservation{Intent: p.intent, EntryAt: p.entryTime,
+			ExitAt: exitTime, Long: long, Short: short})
 	}
 	r.report.PairedEpisodes++
 	actions := []struct {

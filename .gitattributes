@@ -1,0 +1,2 @@
+# Preserve archived acceptance evidence byte for byte on every platform.
+docs/evidence/v2/* -text whitespace=-trailing-space
