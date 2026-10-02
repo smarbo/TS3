@@ -68,6 +68,9 @@ def main():
             artifact["dataset_sha256"], "dataset digest mismatch")
     rows = [json.loads(line) for line in raw.splitlines()]
     require(len(rows) == dataset["rows"] == training["rows"], "row count mismatch")
+    require(stamp(artifact["training_end"]) >= max(stamp(r["exit_time"]) for r in rows) and
+            int(artifact["last_train_ordinal"]) == int(rows[-1]["decision_ordinal"]),
+            "artifact available before final training label")
     require(dataset["v1_research"]["paired_episodes"] ==
             len(rows) + dataset["paired_but_feature_unavailable"], "paired reconciliation")
     positive = net_positive = 0

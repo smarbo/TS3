@@ -40,6 +40,8 @@ Calibration infrastructure consumes only chronological out-of-fold predictions. 
 
 A versioned canonical JSON artifact contains model type/target/schema, ordered columns, coefficients/intercept, training-only means/scales, training start/end and last ordinal, V1/V2/cost versions, dataset hash, training code commit, calibration status, and SHA-256 over canonical artifact bytes excluding the hash field. Go loads and verifies the hash, finite values, schema/version/order and exact expected configuration. Training is offline only. A model change requires a new explicit artifact; there is no live retraining.
 
+The artifact's `training_end` is the **latest actual label exit time** used by its final fit, not its last training decision time. Model scores are unavailable at or before that time. This prevents an offline-fitted artifact from using an outcome whose market endpoint had not yet occurred during a historical replay.
+
 The shared Go live/replay `ApplyTick` path can attach a V3 model ID, artifact hash, uncalibrated score, availability/OOD reason and schema version to a separate V3 intent. Decisions at or before the artifact's training end are explicitly `IN_SAMPLE_PERIOD` and carry no model score; development scores used for comparison come only from chronological validation folds. With no accepted calibration and no validated return magnitude, V3 emits `NO_TRADE`; it never turns an uncalibrated directional score into expected net return. The existing V0/V1/V2 canonical files remain unchanged. The live watchdog is an additional veto and operational times stay outside canonical intent bytes.
 
 ## Acceptance boundaries

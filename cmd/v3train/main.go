@@ -382,12 +382,20 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	// The fitted model cannot be available until every label used by the
+	// final fit has actually become observable, including delayed exits.
+	lastLabelExit := rows[0].ExitTime
+	for _, row := range rows[1:] {
+		if row.ExitTime.After(lastLabelExit) {
+			lastLabelExit = row.ExitTime
+		}
+	}
 	a := v3.Artifact{Version: v3.ArtifactVersion, ModelType: "l2_logistic",
 		FeatureSchema: v3.FeatureSchema, FeatureNames: v3.FeatureNames,
 		TargetVersion: v3.TargetVersion, CostVersion: v3.CostVersion,
 		V1ConfigSHA: rows[0].V1ConfigSHA, V2ConfigSHA: rows[0].V2ConfigSHA,
 		DatasetSHA: source.DatasetSHA, TrainingRevision: revision(),
-		TrainingStart: rows[0].DecisionTime, TrainingEnd: rows[len(rows)-1].DecisionTime,
+		TrainingStart: rows[0].DecisionTime, TrainingEnd: lastLabelExit,
 		LastTrainOrdinal: rows[len(rows)-1].DecisionOrdinal, TrainingRows: len(rows),
 		Lambda: result.SelectedLambda, Mean: s.Mean, Scale: s.Scale,
 		Intercept: beta[0], CalibrationStatus: "UNAVAILABLE_INSUFFICIENT_EVIDENCE"}

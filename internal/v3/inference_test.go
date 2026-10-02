@@ -49,6 +49,14 @@ func TestSharedInferenceFailsClosedAndRepeats(t *testing.T) {
 	if got := EvaluateIntent(inSample, &a); got.Reason != "IN_SAMPLE_PERIOD" || got.RawLogitMicro != nil {
 		t.Fatalf("in-sample score exposed: %+v", got)
 	}
+	// An artifact trained from a five-minute outcome is also unavailable
+	// between its last decision and that outcome's exit. TrainingEnd is
+	// the last label availability time, not merely the last decision time.
+	inSample.AsOfTime = a.TrainingEnd.Add(-time.Minute)
+	inSample.Baseline.AsOfTime = inSample.AsOfTime
+	if got := EvaluateIntent(inSample, &a); got.Reason != "IN_SAMPLE_PERIOD" || got.RawLogitMicro != nil {
+		t.Fatalf("pre-exit score exposed: %+v", got)
+	}
 	i.Signals[2].Status = v2.Unavailable
 	if got := EvaluateIntent(i, &a); got.Action != v1.NoTrade || got.RawLogitMicro != nil ||
 		got.Reason != "FEATURE_UNAVAILABLE" {
