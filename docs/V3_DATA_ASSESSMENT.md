@@ -20,4 +20,4 @@ Status: pre-training assessment, 2026-10-02. The accepted V0/V1/V2 tape is expos
 | Calibration evidence | Insufficient. One day, at most about 260 non-overlapping five-minute episodes, about ten volatile episodes and three net-positive long outcomes cannot support published probability buckets or calibrated confidence. |
 | Sealed final validation | Absent. No observation on this tape can be treated as a sealed test. A later frozen candidate and separately collected, unopened period are mandatory. |
 
-The current tape **cannot statistically complete V3**. This does not prevent engineering the pipeline. The predeclared minimum evidence counts and one-time opening protocol are in [V3_SEALED_TEST_PROTOCOL](V3_SEALED_TEST_PROTOCOL.md); they are not lowered to fit this day.
+The current tape **cannot statistically complete V3**. This does not prevent engineering the pipeline. Later development chronology must first support training and calibration, followed by a different unopened sealed period. The predeclared minimum counts and one-time opening protocol are in [V3_SEALED_TEST_PROTOCOL](V3_SEALED_TEST_PROTOCOL.md); they are not lowered to fit this day.

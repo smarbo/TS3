@@ -38,9 +38,16 @@ func TestSharedInferenceFailsClosedAndRepeats(t *testing.T) {
 	first := EvaluateIntent(i, &a)
 	second := EvaluateIntent(i, &a)
 	if first.Action != v1.NoTrade || first.ModelStatus != "AVAILABLE_UNCALIBRATED" ||
-		first.RawLogitMicro == nil || *first.RawLogitMicro != *second.RawLogitMicro ||
+		first.RawLogitMicro == nil || *first.RawLogitMicro != 1_200_000 ||
+		*first.RawLogitMicro != *second.RawLogitMicro ||
 		first.ModelArtifact != a.SHA256 {
 		t.Fatalf("unexpected inference %+v", first)
+	}
+	inSample := i
+	inSample.AsOfTime = a.TrainingEnd
+	inSample.Baseline.AsOfTime = a.TrainingEnd
+	if got := EvaluateIntent(inSample, &a); got.Reason != "IN_SAMPLE_PERIOD" || got.RawLogitMicro != nil {
+		t.Fatalf("in-sample score exposed: %+v", got)
 	}
 	i.Signals[2].Status = v2.Unavailable
 	if got := EvaluateIntent(i, &a); got.Action != v1.NoTrade || got.RawLogitMicro != nil ||

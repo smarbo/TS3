@@ -45,6 +45,10 @@ func EvaluateIntent(i v2.Intent, artifact *Artifact) Intent {
 		result.Reason, result.ModelStatus = "MODEL_INCOMPATIBLE", "UNAVAILABLE"
 		return result
 	}
+	if !i.AsOfTime.After(artifact.TrainingEnd) {
+		result.Reason, result.ModelStatus = "IN_SAMPLE_PERIOD", "UNAVAILABLE"
+		return result
+	}
 	features, available, err := FeaturesFromIntent(i)
 	if err != nil || !available {
 		result.Reason, result.ModelStatus = "FEATURE_UNAVAILABLE", "UNAVAILABLE"
