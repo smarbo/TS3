@@ -1,6 +1,6 @@
 # Functional and research specification
 
-Status: V0, V1 and V2 engineering milestones are accepted. `main` still contains the V1 completion merge; the completed V2 work and evidence remain on `v2` pending the separate human merge/tag workflow. V2's frozen single-feed contract is in [V2_DESIGN](V2_DESIGN.md) and its acceptance evidence in [V2_FINAL_AUDIT](V2_FINAL_AUDIT.md). No validated predictive or economic strategy result exists.
+Status: V0, V1 and V2 engineering milestones are accepted and merged/tagged on `main`; V3 development is active only on `v3`. V2's frozen single-feed contract is in [V2_DESIGN](V2_DESIGN.md) and its acceptance evidence in [V2_FINAL_AUDIT](V2_FINAL_AUDIT.md). V3's data sufficiency and statistical contract are in [V3_DATA_ASSESSMENT](V3_DATA_ASSESSMENT.md) and [V3_DESIGN](V3_DESIGN.md). No validated predictive or economic strategy result exists.
 
 ## Purpose and boundary
 

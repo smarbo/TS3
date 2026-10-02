@@ -1,10 +1,10 @@
 # Project status
 
-Updated: 2026-09-30
+Updated: 2026-10-02
 
 ## Current phase
 
-**V0 COMPLETE. V1 COMPLETE and merged into `main`. V2 ENGINEERING COMPLETE on `v2`, pending separate human merge/tag.** The V2 gate passed on 2026-09-30 with two byte-identical full accepted-tape replays, exact frozen V0/V1 hash recovery, a clean 65-minute public capture with exact raw-replay V2 intent parity, and the final adversarial audit. `main` remains at the accepted V1 merge `7d315ee`; the annotated `v1-complete` tag exists. The fixed V2 policy made zero directional actions, and no predictive or economic edge is claimed. No V3/V4 functionality or trading/account code has been added.
+**V0/V1/V2 engineering milestones are complete; V2 is merged and tagged on `main` at `39f9ee7`. V3 is active on `v3` and not accepted.** The exposed one-day tape is insufficient for final V3 statistical or economic acceptance. The [V3 data assessment](V3_DATA_ASSESSMENT.md), [pre-training design](V3_DESIGN.md), [adversarial review](V3_DESIGN_REVIEW.md), [experiment ledger](V3_EXPERIMENT_LEDGER.md), and [future sealed-test protocol](V3_SEALED_TEST_PROTOCOL.md) define the current work. No predictive or economic edge is claimed. No V4 functionality or trading/account code has been added.
 
 The official V0 source commit is `d26241151331795cf5005ba09d5f176d1efb6b22` on `v0`. The earlier `main` history containing preacceptance V0 was preserved; the acceptance record belongs on `v0` and is merged into `main` under the milestone branch policy. The run report and final manifest both record the exact clean source commit.
 
@@ -51,7 +51,7 @@ None. V0's engineering acceptance gate is complete. Continue to preserve the off
 
 ## Next milestone action
 
-V2 has no remaining engineering acceptance slice. The next milestone step is separate human review of the completed, pushed `v2` branch. Only that later workflow should merge a clean `v2` into `main` and create an annotated V2 completion tag. Do not merge/tag here or create/start V3. Future economic validation needs later untouched chronology and predeclared research; the exposed V0 tape and short smoke cannot provide it.
+Implement the frozen V3 row export and chronological training/evaluation pipeline on `v3`, beginning with exact primary-target class balance and repeated dataset hashes. The V3 design is frozen before model-outcome inspection. The one-day development tape may support engineering tests and exploratory walk-forward comparisons, but final acceptance requires the separately frozen future period in [V3_SEALED_TEST_PROTOCOL](V3_SEALED_TEST_PROTOCOL.md). Do not merge/tag V3 or start V4 in this task.
 
 ## V2 implementation checkpoints, 2026-09-30
 

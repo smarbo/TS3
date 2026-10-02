@@ -1,6 +1,6 @@
 # Architecture and contracts
 
-Go implementation: V0 and V1 are accepted on `main`; V2 engineering acceptance is complete on `v2`, pending separate human merge/tag. The frozen V1 tick-driven engine remains the benchmark. V2's implemented single-feed owner path and separate evidence/intent schema are in [V2_DESIGN](V2_DESIGN.md), with completed parity evidence in [V2_FINAL_AUDIT](V2_FINAL_AUDIT.md). See [SPEC](SPEC.md) for governing invariants and [PLAN](PLAN.md) for milestone scope.
+Go implementation: V0–V2 are accepted and merged/tagged on `main` at `39f9ee7`; V3 development is active on `v3`. The frozen V1 tick-driven engine remains the benchmark. V2's implemented single-feed owner path and separate evidence/intent schema are in [V2_DESIGN](V2_DESIGN.md), with completed parity evidence in [V2_FINAL_AUDIT](V2_FINAL_AUDIT.md). V3's downstream label barrier, fold-local training and read-only artifact inference contract are frozen in [V3_DESIGN](V3_DESIGN.md). See [SPEC](SPEC.md) for governing invariants and [PLAN](PLAN.md) for milestone scope.
 
 ## Flow and dependency direction
 
