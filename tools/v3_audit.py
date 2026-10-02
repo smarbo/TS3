@@ -7,6 +7,7 @@ import datetime as dt
 import hashlib
 import json
 import math
+import random
 from pathlib import Path
 
 
@@ -110,6 +111,7 @@ def main():
     prior_embargo = []
     totals = collections.defaultdict(float)
     total_validation = 0
+    oof = []
     for fold in training["folds"]:
         start, end = stamp(fold["validation_start"]), stamp(fold["validation_end"])
         cutoff = stamp(fold["train_cutoff"])
@@ -158,6 +160,12 @@ def main():
             close(brier, fold[f"logistic_lambda_{penalty}"]["brier"], "logistic Brier")
             totals[f"lambda_{penalty}"] += loss * len(val)
             totals[f"lambda_{penalty}_brier"] += brier * len(val)
+            if penalty == 1:
+                scores1 = scores
+            else:
+                scores10 = scores
+        for row, s1, s10 in zip(val, scores1, scores10):
+            oof.append((row, base_score, s1, s10))
         totals["null"] += null_loss * len(val)
         totals["null_brier"] += null_brier * len(val)
         total_validation += len(val)
@@ -170,10 +178,47 @@ def main():
     selected = f"lambda_{int(training['selected_development_lambda'])}"
     close(training["aggregate_log_loss"][selected] - training["aggregate_log_loss"]["null"],
           training["selected_minus_null_log_loss"], "selected comparison")
+    selected_index = 2 if selected == "lambda_1" else 3
+    effective = []
+    last_exit = None
+    blocks = collections.defaultdict(list)
+    for row, null_score, s1, s10 in oof:
+        chosen = (s1, s10)[selected_index-2]
+        label = row["depth_up"]
+        null_loss = math.log1p(math.exp(-abs(null_score))) + max(0, -null_score if label else null_score)
+        selected_loss = math.log1p(math.exp(-abs(chosen))) + max(0, -chosen if label else chosen)
+        improvement = null_loss - selected_loss
+        at = stamp(row["decision_time"])
+        key = at.replace(minute=30 if at.minute >= 30 else 0, second=0, microsecond=0).isoformat()
+        blocks[key].append(improvement)
+        if last_exit is None or stamp(row["entry_time"]) >= last_exit:
+            effective.append(improvement)
+            last_exit = stamp(row["exit_time"])
+    block_values = list(blocks.values())
+    rng = random.Random(20261002)
+    draws = []
+    for _ in range(10000):
+        picked = [block_values[rng.randrange(len(block_values))] for _ in block_values]
+        draws.append(sum(map(sum, picked)) / sum(map(len, picked)))
+    draws.sort()
+    cost_sensitivity = {}
+    for fee in (10, 20, 80):
+        net = [r["long_depth_bps"] -
+               (r["long_depth_bps"]-r["long_net_bps"])*(fee+5)/25
+               for r in rows]
+        cost_sensitivity[f"fee_{fee}_allowance_5"] = {
+            "mean_net_bps": sum(net)/len(net), "positive": sum(x > 0 for x in net)}
     print(json.dumps({"dataset_sha256": digest, "rows": len(rows), "depth_up": positive,
                       "long_net_positive": net_positive, "regimes": dict(regimes),
                       "selected_lambda": training["selected_development_lambda"],
-                      "artifact_sha256": artifact["sha256"]}, sort_keys=True, indent=2))
+                      "artifact_sha256": artifact["sha256"],
+                      "oof_rows": len(oof), "oof_nonoverlap": len(effective),
+                      "oof_nonoverlap_mean_log_loss_improvement": sum(effective)/len(effective),
+                      "half_hour_blocks": len(block_values),
+                      "half_hour_bootstrap_p025_p975_descriptive":
+                      [draws[250], draws[9749]],
+                      "always_long_cost_sensitivity": cost_sensitivity},
+                     sort_keys=True, indent=2))
     print("V3 DATASET/WALK-FORWARD AUDIT PASSED")
 
 
