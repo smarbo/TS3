@@ -2,6 +2,8 @@
 
 Go implementation: V0–V2 are accepted and merged/tagged on `main` at `39f9ee7`; V3 development is active on `v3`. The frozen V1 tick-driven engine remains the benchmark. V2's implemented single-feed owner path and separate evidence/intent schema are in [V2_DESIGN](V2_DESIGN.md), with completed parity evidence in [V2_FINAL_AUDIT](V2_FINAL_AUDIT.md). V3's downstream label barrier, fold-local training and read-only artifact inference contract are frozen in [V3_DESIGN](V3_DESIGN.md). See [SPEC](SPEC.md) for governing invariants and [PLAN](PLAN.md) for milestone scope.
 
+V3 artifact availability is an explicit as-of barrier: `training_end` is the latest actual exit time of any label in the fit, and the artifact binds its source run ID. Shared live/replay inference suppresses model scores for every decision in that run and for any decision at or before `training_end`. An offline artifact cannot be backdated into its own recording. The accepted historical tape supplies chronological out-of-fold development scores, while a later distinct run can exercise the frozen artifact in read-only shadow mode.
+
 ## Flow and dependency direction
 
 ```mermaid
