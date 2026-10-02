@@ -13,7 +13,7 @@ import (
 	"ts3/internal/domain"
 )
 
-const ArtifactVersion = "v3.logistic.1"
+const ArtifactVersion = "v3.logistic.2"
 
 type Artifact struct {
 	Version           string     `json:"version"`
@@ -25,6 +25,7 @@ type Artifact struct {
 	V1ConfigSHA       string     `json:"v1_config_sha256"`
 	V2ConfigSHA       string     `json:"v2_config_sha256"`
 	DatasetSHA        string     `json:"dataset_sha256"`
+	TrainingRunID     string     `json:"training_run_id"`
 	TrainingRevision  string     `json:"training_revision"`
 	TrainingStart     time.Time  `json:"training_start"`
 	TrainingEnd       time.Time  `json:"training_end"`
@@ -67,6 +68,7 @@ func (a Artifact) Validate() error {
 		a.FeatureSchema != FeatureSchema || a.FeatureNames != FeatureNames ||
 		a.TargetVersion != TargetVersion || a.CostVersion != CostVersion ||
 		a.V1ConfigSHA == "" || a.V2ConfigSHA == "" || a.DatasetSHA == "" ||
+		a.TrainingRunID == "" ||
 		a.TrainingRevision == "" || a.TrainingRevision == "unknown" ||
 		a.TrainingStart.IsZero() || !a.TrainingEnd.After(a.TrainingStart) ||
 		a.LastTrainOrdinal == 0 || a.TrainingRows < 2 ||

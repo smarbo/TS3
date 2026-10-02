@@ -17,6 +17,7 @@ func inferenceArtifact(t *testing.T) Artifact {
 		FeatureSchema: FeatureSchema, FeatureNames: FeatureNames,
 		TargetVersion: TargetVersion, CostVersion: CostVersion,
 		V1ConfigSHA: "v1", V2ConfigSHA: "v2", DatasetSHA: "dataset",
+		TrainingRunID: "historical-training-run",
 		TrainingRevision: "commit", TrainingStart: start, TrainingEnd: start.Add(time.Hour),
 		LastTrainOrdinal: 100, TrainingRows: 100, Lambda: 1,
 		CalibrationStatus: "UNAVAILABLE_INSUFFICIENT_EVIDENCE"}
@@ -56,6 +57,12 @@ func TestSharedInferenceFailsClosedAndRepeats(t *testing.T) {
 	inSample.Baseline.AsOfTime = inSample.AsOfTime
 	if got := EvaluateIntent(inSample, &a); got.Reason != "IN_SAMPLE_PERIOD" || got.RawLogitMicro != nil {
 		t.Fatalf("pre-exit score exposed: %+v", got)
+	}
+	sameRun := i
+	sameRun.RunID = a.TrainingRunID
+	sameRun.Baseline.RunID = a.TrainingRunID
+	if got := EvaluateIntent(sameRun, &a); got.Reason != "IN_SAMPLE_PERIOD" || got.RawLogitMicro != nil {
+		t.Fatalf("same-source retroactive score exposed: %+v", got)
 	}
 	i.Signals[2].Status = v2.Unavailable
 	if got := EvaluateIntent(i, &a); got.Action != v1.NoTrade || got.RawLogitMicro != nil ||

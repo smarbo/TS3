@@ -62,6 +62,7 @@ func TestArtifactHashSchemaAndOOD(t *testing.T) {
 	a := Artifact{Version: ArtifactVersion, ModelType: "l2_logistic",
 		FeatureSchema: FeatureSchema, FeatureNames: FeatureNames, TargetVersion: TargetVersion,
 		CostVersion: CostVersion, V1ConfigSHA: "v1", V2ConfigSHA: "v2", DatasetSHA: "dataset",
+		TrainingRunID: "synthetic-training-run",
 		TrainingRevision: "commit", TrainingStart: rows[0].DecisionTime,
 		TrainingEnd: rows[len(rows)-1].DecisionTime, LastTrainOrdinal: rows[len(rows)-1].DecisionOrdinal,
 		TrainingRows: len(rows), Lambda: 1, Mean: s.Mean, Scale: s.Scale,

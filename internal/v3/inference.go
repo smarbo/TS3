@@ -45,7 +45,10 @@ func EvaluateIntent(i v2.Intent, artifact *Artifact) Intent {
 		result.Reason, result.ModelStatus = "MODEL_INCOMPATIBLE", "UNAVAILABLE"
 		return result
 	}
-	if !i.AsOfTime.After(artifact.TrainingEnd) {
+	// A model fitted after seeing a run's labels cannot be retroactively
+	// deployed anywhere inside that same recording, even after its last
+	// label exit. The time boundary also protects adjacent later runs.
+	if i.RunID == artifact.TrainingRunID || !i.AsOfTime.After(artifact.TrainingEnd) {
 		result.Reason, result.ModelStatus = "IN_SAMPLE_PERIOD", "UNAVAILABLE"
 		return result
 	}
