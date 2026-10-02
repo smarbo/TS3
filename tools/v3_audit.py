@@ -50,6 +50,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("dataset", type=Path)
     parser.add_argument("training", type=Path)
+    parser.add_argument("--v2-intents", type=Path,
+                        help="accepted V2 intent journal for fold health coverage")
     args = parser.parse_args()
     dataset = json.loads((args.dataset / "report.json").read_text())
     training = json.loads((args.training / "report.json").read_text())
@@ -212,6 +214,22 @@ def main():
                for r in rows]
         cost_sensitivity[f"fee_{fee}_allowance_5"] = {
             "mean_net_bps": sum(net)/len(net), "positive": sum(x > 0 for x in net)}
+    fold_coverage = []
+    if args.v2_intents:
+        intent_bytes = args.v2_intents.read_bytes()
+        require(hashlib.sha256(intent_bytes).hexdigest() == V2_INTENT,
+                "accepted V2 journal hash mismatch")
+        intents = [json.loads(line) for line in intent_bytes.splitlines()]
+        for fold in training["folds"]:
+            start, end = stamp(fold["validation_start"]), stamp(fold["validation_end"])
+            cohort = [i for i in intents if start <= stamp(i["as_of_time"]) < end]
+            eligible = sum(i["v1_baseline"]["eligible"] for i in cohort)
+            require(eligible >= fold["validation"]["rows"],
+                    "V3 rows exceed health-eligible V2 decisions")
+            fold_coverage.append({"fold": fold["index"], "calendar_decisions": len(cohort),
+                                  "healthy_depth_eligible": eligible,
+                                  "v3_paired_feature_rows": fold["validation"]["rows"],
+                                  "eligible_without_v3_row": eligible-fold["validation"]["rows"]})
     print(json.dumps({"dataset_sha256": digest, "rows": len(rows), "depth_up": positive,
                       "long_net_positive": net_positive, "regimes": dict(regimes),
                       "selected_lambda": training["selected_development_lambda"],
@@ -221,6 +239,7 @@ def main():
                       "half_hour_blocks": len(block_values),
                       "half_hour_bootstrap_p025_p975_descriptive":
                       [draws[250], draws[9749]],
+                      "fold_coverage": fold_coverage,
                       "always_long_cost_sensitivity": cost_sensitivity},
                      sort_keys=True, indent=2))
     print("V3 DATASET/WALK-FORWARD AUDIT PASSED")
