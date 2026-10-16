@@ -197,7 +197,7 @@ def main():
         at = stamp(row["decision_time"])
         key = at.replace(minute=30 if at.minute >= 30 else 0, second=0, microsecond=0).isoformat()
         blocks[key].append(improvement)
-        if last_exit is None or stamp(row["entry_time"]) >= last_exit:
+        if last_exit is None or at >= last_exit:
             effective.append(improvement)
             last_exit = stamp(row["exit_time"])
     block_values = list(blocks.values())

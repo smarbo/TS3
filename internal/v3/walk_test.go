@@ -29,6 +29,15 @@ func TestPurgedExpandingFoldsAndEmbargo(t *testing.T) {
 	if Nonoverlap(rows[:20]) != 4 {
 		t.Fatalf("unexpected effective episode count: %d", Nonoverlap(rows[:20]))
 	}
+	// Delayed entry cannot make a decision taken during a prior outcome an
+	// independent episode, even if that entry happens after the prior exit.
+	overlap := append([]Row(nil), rows[:2]...)
+	overlap[0].ExitTime = overlap[0].DecisionTime.Add(90 * time.Second)
+	overlap[1].DecisionTime = overlap[0].DecisionTime.Add(89 * time.Second)
+	overlap[1].EntryTime = overlap[0].DecisionTime.Add(91 * time.Second)
+	if Nonoverlap(overlap) != 1 {
+		t.Fatalf("delayed entry overstated effective episodes: %d", Nonoverlap(overlap))
+	}
 	// The first validation ends at hour 8. Its 30-minute post-validation
 	// embargo must not enter the next fold's expanded training history.
 	for _, k := range folds[1].Train {

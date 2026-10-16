@@ -77,8 +77,8 @@ func Select(rows []Row, indices []int) []Row {
 	return selected
 }
 
-// Nonoverlap selects earliest decisions, then skips any episode whose entry
-// precedes the previous selected exit. It is a descriptive effective count.
+// Nonoverlap selects earliest decisions, then skips any decision made before
+// the previous selected outcome exited. It is a descriptive effective count.
 func Nonoverlap(rows []Row) int {
 	if len(rows) == 0 {
 		return 0
@@ -90,7 +90,7 @@ func Nonoverlap(rows []Row) int {
 	count := 0
 	var lastExit time.Time
 	for _, row := range ordered {
-		if !lastExit.IsZero() && row.EntryTime.Before(lastExit) {
+		if !lastExit.IsZero() && row.DecisionTime.Before(lastExit) {
 			continue
 		}
 		count++
