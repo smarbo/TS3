@@ -1,0 +1,17 @@
+/home/eddie/ts3-v3replay-f6b1825: go1.27.0
+	path	ts3/cmd/v3replay
+	mod	ts3	v0.0.0-20261016185803-f6b182526dee	
+	build	-buildmode=exe
+	build	-compiler=gc
+	build	CGO_ENABLED=1
+	build	CGO_CFLAGS=
+	build	CGO_CPPFLAGS=
+	build	CGO_CXXFLAGS=
+	build	CGO_LDFLAGS=
+	build	GOARCH=amd64
+	build	GOOS=linux
+	build	GOAMD64=v1
+	build	vcs=git
+	build	vcs.revision=f6b182526dee4577632f0ae0d4f1c21685ab22c9
+	build	vcs.time=2026-10-16T18:58:03Z
+	build	vcs.modified=false

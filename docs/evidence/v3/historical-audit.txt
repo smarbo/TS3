@@ -1,0 +1,9 @@
+{
+  "analysis_revision": "f6b182526dee4577632f0ae0d4f1c21685ab22c9",
+  "artifact_sha256": "0f1c323105c72c16a33fd68d4401b4413f2ed8dd44dbc9102fea6cb3ff2418b7",
+  "intents": 1446,
+  "ordinals": 12316574,
+  "run_id": "kraken-v0-server-20260927T203224Z",
+  "v3_intent_sha256": "67788b7773f9069fa5b257c64c49ef05291d31b679c3e3c6e5f10794142120aa"
+}
+V3 HISTORICAL IN-SAMPLE AUDIT PASSED

@@ -23,11 +23,19 @@ def require(ok, message):
         raise ValueError(message)
 
 
+def file_digest(path):
+    h = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
 def audit(replay_dir, artifact_path):
     report = json.loads((replay_dir / "report.json").read_bytes())
     artifact = json.loads(artifact_path.read_bytes())
     intents_path = replay_dir / "intents.jsonl"
-    digest = hashlib.sha256(intents_path.read_bytes()).hexdigest()
+    digest = file_digest(intents_path)
     raw = report["input"]
     require(report["run_id"] == artifact["training_run_id"] == RUN, "source run")
     require(report["analysis_revision"] == artifact["training_revision"] == REVISION and
@@ -42,6 +50,9 @@ def audit(replay_dir, artifact_path):
             report["v0_state_sha256"] == V0_STATE and
             report["v1_intent_sha256"] == V1 and
             report["v2_intent_sha256"] == V2, "accepted baseline divergence")
+    require(file_digest(replay_dir / "v0" / "normalized.jsonl") == V0_NORMALIZED and
+            file_digest(replay_dir / "v0" / "state.jsonl") == V0_STATE,
+            "actual V0 output file divergence")
     require(report["artifact_sha256"] == artifact["sha256"], "artifact hash")
     require(report["v3_intent_sha256"] == digest, "V3 intent hash")
     require(report["intents"] == INTENTS and
