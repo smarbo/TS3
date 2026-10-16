@@ -1,0 +1,17 @@
+/home/eddie/ts3-v3collector-68a30de: go1.27.0
+	path	ts3/cmd/collector
+	mod	ts3	v0.0.0-20261002151914-68a30de2d4b8	
+	build	-buildmode=exe
+	build	-compiler=gc
+	build	CGO_ENABLED=1
+	build	CGO_CFLAGS=
+	build	CGO_CPPFLAGS=
+	build	CGO_CXXFLAGS=
+	build	CGO_LDFLAGS=
+	build	GOARCH=amd64
+	build	GOOS=linux
+	build	GOAMD64=v1
+	build	vcs=git
+	build	vcs.revision=68a30de2d4b814a9047e6d1caa289f8fcb60e9d8
+	build	vcs.time=2026-10-02T15:19:14Z
+	build	vcs.modified=false

@@ -1,0 +1,21 @@
+{
+  "intents": 23,
+  "model_status": {
+    "AVAILABLE_UNCALIBRATED": 7,
+    "UNAVAILABLE": 16
+  },
+  "raw_ordinals": 271893,
+  "reasons": {
+    "FEATURE_UNAVAILABLE": 16,
+    "UNCALIBRATED_NO_EDGE": 7
+  },
+  "reconnects": 0,
+  "revision": "68a30de2d4b814a9047e6d1caa289f8fcb60e9d8",
+  "run_id": "v3-smoke-68a30de-20261016T185508Z",
+  "v0_normalized_sha256": "f03b35c1bb34af8e2fdc55b5f3b9be52df13c176945968fe46bd679fd9095357",
+  "v0_state_sha256": "7010d4dd2a192a4e5900ebc31e96a286782b3499231e8370fc16d80da0aceef8",
+  "v2_intent_sha256": "8b0566fe31e5660db4c659a27d3cb64de265855ae73eeaff870ac9541bc2bcc6",
+  "v3_intent_sha256": "5ffc65a7457b05e36b214efb9679622c99ac3a3ae3895fd4059f80037e8c0da0",
+  "warmed": 7
+}
+V3 LIVE/REPLAY AUDIT PASSED
