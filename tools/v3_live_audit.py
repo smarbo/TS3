@@ -103,7 +103,8 @@ def audit(run_dir, replay_dir, artifact_path, revision):
         reasons[reason] = reasons.get(reason, 0) + 1
         statuses[status] = statuses.get(status, 0) + 1
         previous = at
-    require(count >= 20 and warmed > 0 and count == journal["intents"] ==
+    require(count >= 20 and warmed > 0 and statuses.get("AVAILABLE_UNCALIBRATED", 0) > 0 and
+            count == journal["intents"] ==
             journal["acknowledged"] == replay["intents"], "decision/ack count")
     require(previous == int(journal["last_intent_ordinal"]) and
             reasons == journal["reasons"] == replay["reasons"] and

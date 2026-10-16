@@ -73,3 +73,30 @@ func TestInSampleCalibrationIllusionFailsLater(t *testing.T) {
 		t.Fatal("short correlated calibration history passed the evidence gate")
 	}
 }
+
+func TestCalibrationGateCanOpenOnIndependentChronology(t *testing.T) {
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	var predictions []OOFPrediction
+	for day := 0; day < 30; day++ {
+		for episode := 0; episode < 34; episode++ {
+			index := day*34 + episode
+			at := start.Add(time.Duration(day)*24*time.Hour +
+				6*time.Hour + time.Duration(episode)*10*time.Minute)
+			predictions = append(predictions, OOFPrediction{
+				DecisionOrdinal: uint64(index + 1), DecisionTime: at,
+				ExitTime:        at.Add(5 * time.Minute),
+				ValidationStart: start, ValidationEnd: start.Add(30 * 24 * time.Hour),
+				TrainMaxExit: start.Add(-time.Minute), Fold: 0,
+				Score: float64(index%2)*2 - 1, Label: index%2 == 1,
+			})
+		}
+	}
+	if ok, reason := CalibrationEligible(predictions); !ok {
+		t.Fatalf("independent 30-day chronology rejected: %s", reason)
+	}
+	boundary := predictions[len(predictions)/2].DecisionTime
+	fit, err := FitPlatt(predictions[:len(predictions)/2], boundary)
+	if err != nil || !fit.FitUntil.Before(boundary) {
+		t.Fatalf("earlier OOF calibrator failed: %+v, %v", fit, err)
+	}
+}

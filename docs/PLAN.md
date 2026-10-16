@@ -64,7 +64,7 @@ The initial V1 engineering definitions, deliberately frozen before inspecting ou
 
 ## V3 — Statistical / ML modelling
 
-**Active branch and scope (2026-10-02).** V2 was merged/tagged on `main` at `39f9ee7`; V3 work is on `v3`. The [data assessment](V3_DATA_ASSESSMENT.md) finds the exposed one-day tape insufficient for calibration or final statistical acceptance. Proceed with the predeclared small regularized logistic/base-rate engineering comparison in [V3_DESIGN](V3_DESIGN.md), deterministic row export, purged/embargoed folds, artifact verification and shared read-only inference. Ridge is exploratory if supported; boosted trees are postponed for insufficient effective sample. The accepted V0/V1/V2 engines and availability barrier remain benchmarks.
+**Active branch and scope (2026-10-16).** V2 was merged/tagged on `main` at `39f9ee7`; V3 work is on `v3`. The [data assessment](V3_DATA_ASSESSMENT.md) and completed [development comparison](V3_WALK_FORWARD_REPORT.md) find the exposed one-day tape insufficient for calibration or final statistical acceptance. The predeclared small logistic/base-rate comparison, deterministic row export, purged/embargoed folds, artifact verification and shared read-only inference are implemented. Both registered logistic penalties lose to the null; ridge and boosted trees were not justified by this sample. The accepted V0/V1/V2 engines and availability barrier remain benchmarks. The [research report](V3_RESEARCH_REPORT.md) and [final audit](V3_FINAL_AUDIT.md) record the result and outstanding evidence gate.
 
 **Non-scope.** No deep models by default, online learning without a frozen evaluation protocol, training on final test, or using final test for model selection.
 

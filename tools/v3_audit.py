@@ -46,6 +46,18 @@ def close(actual, expected, label):
     require(math.isclose(actual, expected, rel_tol=1e-9, abs_tol=1e-10), label)
 
 
+def nonoverlap(rows):
+    last_exit = None
+    count = 0
+    for row in rows:
+        at = stamp(row["decision_time"])
+        if last_exit is not None and at < last_exit:
+            continue
+        count += 1
+        last_exit = stamp(row["exit_time"])
+    return count
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("dataset", type=Path)
@@ -70,6 +82,8 @@ def main():
             artifact["dataset_sha256"], "dataset digest mismatch")
     rows = [json.loads(line) for line in raw.splitlines()]
     require(len(rows) == dataset["rows"] == training["rows"], "row count mismatch")
+    require(nonoverlap(rows) == training["nonoverlapping_episodes"],
+            "full-day decision-time effective count")
     require(stamp(artifact["training_end"]) >= max(stamp(r["exit_time"]) for r in rows) and
             int(artifact["last_train_ordinal"]) == int(rows[-1]["decision_ordinal"]) and
             artifact["training_run_id"] == dataset["source_run_id"],
@@ -133,6 +147,8 @@ def main():
         require(len(val) == fold["validation"]["rows"] == fold["null"]["rows"] ==
                 fold["logistic_lambda_1"]["rows"] == fold["logistic_lambda_10"]["rows"],
                 f"fold {fold['index']} population mismatch")
+        require(nonoverlap(val) == fold["validation"]["nonoverlapping_episodes"],
+                f"fold {fold['index']} validation effective count")
         require(sum(r["depth_up"] for r in val) == fold["validation"]["positive"],
                 f"fold {fold['index']} class mismatch")
         require(int(val[0]["decision_ordinal"]) == int(fold["validation_first_ordinal"]) and
@@ -144,6 +160,7 @@ def main():
         require(len(train) == fold["train_rows"] and
                 int(train[-1]["decision_ordinal"]) == int(fold["train_last_ordinal"]) and
                 sum(r["depth_up"] for r in train) == fold["train_positive"] and
+                nonoverlap(train) == fold["train_nonoverlap"] and
                 max(stamp(r["exit_time"]) for r in train) == stamp(fold["train_max_label_exit"]),
                 f"fold {fold['index']} train/purge/embargo mismatch")
         p = (sum(r["depth_up"] for r in train) + 1) / (len(train) + 2)
